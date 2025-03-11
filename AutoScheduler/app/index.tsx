@@ -1,22 +1,26 @@
-import { View, Text, StyleSheet } from "react-native";
+import { useEffect, useState } from "react";
+import { useRouter, useRootNavigationState } from "expo-router";
+import { View, ActivityIndicator } from "react-native";
 
 export default function Index() {
-  return (
-    <View style={styles.container}>
-      <Text style={styles.text}>Welcome to Expo Router!</Text>
-    </View>
-  );
-}
+  const router = useRouter();
+  const navigationState = useRootNavigationState();
+  const [isReady, setIsReady] = useState(false);
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "#fff",
-  },
-  text: {
-    fontSize: 20,
-    fontWeight: "bold",
-  },
-});
+  useEffect(() => {
+    if (navigationState?.key && !isReady) {
+      setIsReady(true);
+      router.replace("/signin"); // Navigate only when the router is ready
+    }
+  }, [navigationState, isReady]);
+
+  if (!isReady) {
+    return (
+      <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
+        <ActivityIndicator size="large" color="#000" />
+      </View>
+    );
+  }
+
+  return null; // No UI, just redirects once ready
+}
