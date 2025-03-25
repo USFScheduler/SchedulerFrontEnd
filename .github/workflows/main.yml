@@ -13,7 +13,7 @@ jobs:
 
     defaults:
       run:
-        working-directory: ./AutoScheduler  # ✅ This matches your folder layout
+        working-directory: ./AutoScheduler  # Changed to finally match proper structure...
 
     steps:
       - name: Checkout code
