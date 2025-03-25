@@ -155,7 +155,7 @@ export default function ScheduleScreen() {
 
       <TouchableOpacity
         style={styles.finalizeButton}
-        onPress={() => router.push("/finalize")} // make sure finalize.tsx exists
+        onPress={() => router.push("/finalize")} //Navigate to the Finalize screen
       >
         <Text style={styles.finalizeText}>Finalize Schedule</Text>
       </TouchableOpacity>
