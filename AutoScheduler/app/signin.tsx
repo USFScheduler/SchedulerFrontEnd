@@ -14,17 +14,22 @@ const SignInScreen = () => {
       <TextInput
         style={styles.input}
         placeholder="Username"
+        placeholderTextColor="#999"
         value={username}
         onChangeText={setUsername}
       />
       <TextInput
         style={styles.input}
         placeholder="Password"
+        placeholderTextColor="#999"
         secureTextEntry
         value={password}
         onChangeText={setPassword}
       />
-      <TouchableOpacity style={styles.button}>
+      <TouchableOpacity
+        style={styles.button}
+        onPress={() => router.push("/schedule")}
+      >
         <Text style={styles.buttonText}>Continue</Text>
       </TouchableOpacity>
       <TouchableOpacity onPress={() => router.push("/register")} style={styles.registerButton}>
