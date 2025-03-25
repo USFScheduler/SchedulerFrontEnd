@@ -64,6 +64,7 @@ export default function ScheduleScreen() {
         <View key={index} style={styles.eventBox}>
           <TextInput
             placeholder="Event Name"
+            placeholderTextColor="#999"
             style={styles.input}
             value={event.name}
             onChangeText={(text) => updateEvent(index, "name", text)}
@@ -72,6 +73,7 @@ export default function ScheduleScreen() {
           <View style={styles.row}>
             <TextInput
               placeholder="Start Time (HH:MM)"
+              placeholderTextColor="#999"
               style={styles.inputHalf}
               value={event.start}
               onChangeText={(text) => updateEvent(index, "start", text)}
@@ -99,6 +101,7 @@ export default function ScheduleScreen() {
           <View style={styles.row}>
             <TextInput
               placeholder="End Time (HH:MM)"
+              placeholderTextColor="#999"
               style={styles.inputHalf}
               value={event.end}
               onChangeText={(text) => updateEvent(index, "end", text)}
