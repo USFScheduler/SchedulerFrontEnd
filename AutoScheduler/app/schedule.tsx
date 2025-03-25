@@ -9,7 +9,7 @@ import {
 } from "react-native";
 import { useRouter } from "expo-router";
 
-// 🔧 Define the shape of an Event
+//Define the shape of an Event
 type Event = {
   name: string;
   start: string;
