@@ -1,17 +1,29 @@
 import React from "react";
 import { render, fireEvent } from "@testing-library/react-native";
 import ScheduleScreen from "../app/schedule";
-import * as ExpoRouter from "expo-router"; 
+import * as ExpoRouter from "expo-router";
 
+// ✅ Mock alert (fixes CI crash due to alert being undefined)
+global.alert = jest.fn();
+
+// ✅ Mock expo-router hooks
 jest.mock("expo-router", () => ({
   useRouter: jest.fn(),
-  usePathname: jest.fn(() => "/schedule"), 
+  usePathname: jest.fn(() => "/schedule"),
 }));
 
+// ✅ Mock Axios to prevent real network calls in CI
+jest.mock("axios", () => ({
+  __esModule: true,
+  default: {
+    post: jest.fn(() => Promise.resolve({ data: {} })),
+    isAxiosError: () => true,
+  },
+}));
 
 describe("ScheduleScreen", () => {
   beforeEach(() => {
-    //Reset and assign fresh mock every time
+    // Assign mock router for every test
     (ExpoRouter.useRouter as jest.Mock).mockReturnValue({
       push: jest.fn(),
     });
@@ -20,6 +32,8 @@ describe("ScheduleScreen", () => {
   it("renders with one event by default", () => {
     const { getByPlaceholderText } = render(<ScheduleScreen />);
     expect(getByPlaceholderText("Event Name")).toBeTruthy();
+    expect(getByPlaceholderText("Start Time (HH:MM)")).toBeTruthy();
+    expect(getByPlaceholderText("End Time (HH:MM)")).toBeTruthy();
   });
 
   it("adds a new event when Add Another Event is pressed", () => {
