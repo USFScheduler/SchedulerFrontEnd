@@ -1,18 +1,18 @@
 import React from "react";
-import { render, fireEvent } from "@testing-library/react-native";
+import { render, fireEvent, waitFor } from "@testing-library/react-native";
 import ScheduleScreen from "../app/schedule";
 import * as ExpoRouter from "expo-router";
 
-// ✅ Mock alert (fixes CI crash due to alert being undefined)
+// ✅ Mock alert so it doesn't crash in Node environment (CI)
 global.alert = jest.fn();
 
-// ✅ Mock expo-router hooks
+// ✅ Mock expo-router
 jest.mock("expo-router", () => ({
   useRouter: jest.fn(),
   usePathname: jest.fn(() => "/schedule"),
 }));
 
-// ✅ Mock Axios to prevent real network calls in CI
+// ✅ Mock axios to avoid real HTTP requests in tests
 jest.mock("axios", () => ({
   __esModule: true,
   default: {
@@ -23,7 +23,7 @@ jest.mock("axios", () => ({
 
 describe("ScheduleScreen", () => {
   beforeEach(() => {
-    // Assign mock router for every test
+    // Assign mock push function before each test
     (ExpoRouter.useRouter as jest.Mock).mockReturnValue({
       push: jest.fn(),
     });
@@ -44,17 +44,21 @@ describe("ScheduleScreen", () => {
 
   it("updates event text fields", () => {
     const { getByPlaceholderText } = render(<ScheduleScreen />);
-    const name = getByPlaceholderText("Event Name");
-    fireEvent.changeText(name, "English Class");
-    expect(name.props.value).toBe("English Class");
+    const nameInput = getByPlaceholderText("Event Name");
+    fireEvent.changeText(nameInput, "English Class");
+    expect(nameInput.props.value).toBe("English Class");
   });
 
-  it("navigates on Finalize Schedule", () => {
+  it("navigates on Finalize Schedule", async () => {
     const mockPush = jest.fn();
     (ExpoRouter.useRouter as jest.Mock).mockReturnValue({ push: mockPush });
 
     const { getByText } = render(<ScheduleScreen />);
     fireEvent.press(getByText("Finalize Schedule"));
-    expect(mockPush).toHaveBeenCalledWith("/finalize");
+
+    //Wait for navigation after async submission
+    await waitFor(() => {
+      expect(mockPush).toHaveBeenCalledWith("/finalize");
+    });
   });
 });
