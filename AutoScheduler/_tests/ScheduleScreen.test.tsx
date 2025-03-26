@@ -3,10 +3,11 @@ import { render, fireEvent } from "@testing-library/react-native";
 import ScheduleScreen from "../app/schedule";
 import * as ExpoRouter from "expo-router"; 
 
-//Mock useRouter globally
 jest.mock("expo-router", () => ({
-  useRouter: jest.fn(), //mock useRouter as a jest function
+  useRouter: jest.fn(),
+  usePathname: jest.fn(() => "/schedule"), 
 }));
+
 
 describe("ScheduleScreen", () => {
   beforeEach(() => {
