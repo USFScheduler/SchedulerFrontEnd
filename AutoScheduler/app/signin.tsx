@@ -21,7 +21,7 @@ const SignInScreen = () => {
       const data = await response.json();
 
       if (response.ok) {
-        router.push("/schedule"); // Redirect to schedule if login is successful
+        router.push("/schedule"); //Redirect to schedule if login is successful
       } else {
         setError(data.errors || "Invalid credentials");
       }
