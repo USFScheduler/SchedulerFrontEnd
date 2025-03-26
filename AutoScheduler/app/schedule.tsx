@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import axios from "axios";
 import {
   View,
   Text,
@@ -55,6 +56,34 @@ export default function ScheduleScreen() {
     updated[index][field] = !updated[index][field];
     setEvents(updated);
   };
+
+  const postEvents = async () => {
+    try {
+      const response = await axios.post("http://localhost:3000/tasks", {
+        tasks: events.map(event => ({
+          title: event.name,
+          start_time: event.start,
+          end_time: event.end,
+          am_start: event.amStart,
+          am_end: event.amEnd,
+          days_of_week: event.days,
+        })),
+      });
+      console.log("Schedule submitted successfully:", response.data);
+      alert("Schedule submitted successfully!");
+    } catch (error) {
+      // Check if the error is an AxiosError
+      if (axios.isAxiosError(error)) {
+        console.error("Axios error:", error.response?.data || error.message);
+        alert(`Failed to submit schedule: ${error.response?.data?.message || error.message}`);
+      } else {
+        // Handle generic errors
+        console.error("Unexpected error:", error);
+        alert("An unexpected error occurred. Please try again.");
+      }
+    }
+  };
+
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
@@ -158,8 +187,10 @@ export default function ScheduleScreen() {
 
       <TouchableOpacity
         style={styles.finalizeButton}
-        onPress={() => router.push("/finalize")} //Navigate to the Finalize screen
-      >
+        onPress={async () => {
+          await postEvents(); // Call the postEvents function to send data to the server
+          router.push("/finalize"); // Navigate to the Finalize screen
+        }}      >
         <Text style={styles.finalizeText}>Finalize Schedule</Text>
       </TouchableOpacity>
     </ScrollView>
