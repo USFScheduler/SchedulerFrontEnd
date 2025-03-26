@@ -23,7 +23,7 @@ const RegisterScreen: React.FC = () => {
         router.push("/schedule");
       }
     } catch (error) {
-      // ✅ Correctly handle Axios errors
+      //Correctly handle Axios errors
       if (axios.isAxiosError(error)) {
         const axiosError = error as AxiosError<{ error: string }>;
         setErrorMessage(axiosError.response?.data?.error || "Registration failed. Try again.");
