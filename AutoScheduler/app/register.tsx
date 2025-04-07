@@ -8,6 +8,7 @@ const RegisterScreen: React.FC = () => {
   const [name, setName] = useState("");
   const [password, setPassword] = useState("");
   const [email, setEmail] = useState("");
+  const [canvasToken, setCanvasToken] = useState(""); 
   const [errorMessage, setErrorMessage] = useState("");
 
   const handleRegister = async () => {
@@ -15,15 +16,18 @@ const RegisterScreen: React.FC = () => {
 
     try {
       const response = await axios.post("http://127.0.0.1:3000/users", {
-        user: { name, password, email },
+        user: {
+          name,
+          password,
+          email,
+          canvas_token: canvasToken, // Include canvas token in request
+        },
       });
 
       if (response.status === 201) {
-        // Registration successful -> navigate to schedule screen
         router.push("/schedule");
       }
     } catch (error) {
-      //Correctly handle Axios errors
       if (axios.isAxiosError(error)) {
         const axiosError = error as AxiosError<{ error: string }>;
         setErrorMessage(axiosError.response?.data?.error || "Registration failed. Try again.");
@@ -37,7 +41,7 @@ const RegisterScreen: React.FC = () => {
     <View style={styles.container}>
       <Text style={styles.title}>AutoScheduler</Text>
       <Text style={styles.subtitle}>Create an account</Text>
- 
+
       <TextInput
         style={styles.input}
         placeholder="Username"
@@ -60,6 +64,13 @@ const RegisterScreen: React.FC = () => {
         value={email}
         onChangeText={setEmail}
       />
+      <TextInput
+        style={styles.input}
+        placeholder="Enter Canvas Token Here"
+        placeholderTextColor="#999"
+        value={canvasToken}
+        onChangeText={setCanvasToken}
+      />
 
       {errorMessage ? <Text style={styles.error}>{errorMessage}</Text> : null}
 
@@ -78,12 +89,26 @@ const styles = StyleSheet.create({
   container: { flex: 1, justifyContent: "center", alignItems: "center", padding: 20 },
   title: { fontSize: 24, fontWeight: "bold", marginBottom: 10 },
   subtitle: { fontSize: 16, color: "#666", marginBottom: 20 },
-  input: { width: "100%", padding: 10, borderWidth: 1, borderColor: "#ccc", borderRadius: 5, marginBottom: 10 },
-  button: { backgroundColor: "black", padding: 10, borderRadius: 5, width: "100%", alignItems: "center", marginTop: 10 },
+  input: {
+    width: "100%",
+    padding: 10,
+    borderWidth: 1,
+    borderColor: "#ccc",
+    borderRadius: 5,
+    marginBottom: 10,
+  },
+  button: {
+    backgroundColor: "black",
+    padding: 10,
+    borderRadius: 5,
+    width: "100%",
+    alignItems: "center",
+    marginTop: 10,
+  },
   buttonText: { color: "white", fontSize: 16 },
   registerButton: { marginTop: 20 },
   registerText: { color: "black", fontSize: 14 },
-  error: { color: "red", marginTop: 10 }, // Error styling
+  error: { color: "red", marginTop: 10 },
 });
 
 export default RegisterScreen;
