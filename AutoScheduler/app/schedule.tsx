@@ -1,3 +1,4 @@
+import TabBar from "../components/TabBar";
 import React, { useState } from "react";
 import axios from "axios";
 import {
@@ -193,6 +194,7 @@ export default function ScheduleScreen() {
         }}      >
         <Text style={styles.finalizeText}>Finalize Schedule</Text>
       </TouchableOpacity>
+      <TabBar />
     </ScrollView>
   );
 }
