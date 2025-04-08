@@ -189,7 +189,7 @@ export default function ScheduleScreen() {
       <TouchableOpacity
         style={styles.finalizeButton}
         onPress={async () => {
-          await postEvents(); // Call the postEvents function to send data to the server
+          // await postEvents(); // Call the postEvents function to send data to the server
           router.push("/finalize"); // Navigate to the Finalize screen
         }}      >
         <Text style={styles.finalizeText}>Finalize Schedule</Text>
