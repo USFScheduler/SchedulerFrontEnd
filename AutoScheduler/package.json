@@ -11,9 +11,10 @@
     "test": "jest --ci",
     "lint": "expo lint"
   },
-  "jest": {
-    "preset": "jest-expo"
-  },
+"jest": {
+  "preset": "jest-expo",
+  "setupFilesAfterEnv": ["<rootDir>/jest.setup.ts"]
+},
   "dependencies": {
     "@expo/vector-icons": "^14.0.2",
     "@react-navigation/bottom-tabs": "^7.2.0",
