@@ -1,6 +1,7 @@
 import TabBar from "../components/TabBar";
 import React, { useState } from "react";
 import axios from "axios";
+import api from '../api/api';
 import {
   View,
   Text,
@@ -60,7 +61,7 @@ export default function ScheduleScreen() {
 
   const postEvents = async () => {
     try {
-      const response = await axios.post("http://localhost:3000/tasks", {
+      const response = await api.post("/tasks", {
         tasks: events.map(event => ({
           title: event.name,
           start_time: event.start,
@@ -189,7 +190,7 @@ export default function ScheduleScreen() {
       <TouchableOpacity
         style={styles.finalizeButton}
         onPress={async () => {
-          // await postEvents(); // Call the postEvents function to send data to the server
+           await postEvents(); // Call the postEvents function to send data to the server
           router.push("/finalize"); // Navigate to the Finalize screen
         }}      >
         <Text style={styles.finalizeText}>Finalize Schedule</Text>

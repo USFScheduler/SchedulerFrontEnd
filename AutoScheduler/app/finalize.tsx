@@ -1,7 +1,7 @@
 // src/components/CanvasAssignments.tsx
 import React, { useState, useEffect } from 'react';
 import { View, Text, FlatList, StyleSheet, ActivityIndicator, TouchableOpacity } from 'react-native';
-import axios from 'axios';
+import api from '../api/api'; // adjust path as needed
 import { format } from 'date-fns';
 
 // Define interfaces for our data structure
@@ -31,7 +31,8 @@ const CanvasAssignments: React.FC = () => {
     try {
       setLoading(true);
       // Replace with your API endpoint
-      const response = await axios.get<Assignment[]>('http://localhost:3000/api/v1/canvas/upcoming_assignments');
+      const response = await api.get<Assignment[]>('/canvas/upcoming_assignments');
+
 
       if (response.status !== 200) {
         throw new Error('Failed to fetch assignments');

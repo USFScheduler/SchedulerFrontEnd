@@ -6,12 +6,15 @@ import * as ExpoRouter from "expo-router";
 // Mock alert so it doesn't crash in Node environment (CI)
 global.alert = jest.fn();
 
+jest.mock('axios');
+
 // Mock expo-router
 jest.mock("expo-router", () => ({
   useRouter: jest.fn(),
   usePathname: jest.fn(() => "/schedule"),
 }));
 
+/*
 // Mock axios to avoid real HTTP requests in tests
 jest.mock("axios", () => ({
   __esModule: true,
@@ -20,6 +23,7 @@ jest.mock("axios", () => ({
     isAxiosError: () => true,
   },
 }));
+*/
 
 describe("ScheduleScreen", () => {
   beforeEach(() => {

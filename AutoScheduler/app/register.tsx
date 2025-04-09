@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { View, Text, TextInput, TouchableOpacity, StyleSheet } from "react-native";
 import { useRouter } from "expo-router";
+import api from "../api/api"; // adjust path as needed
 import axios, { AxiosError } from "axios";
 
 const RegisterScreen: React.FC = () => {
@@ -15,7 +16,7 @@ const RegisterScreen: React.FC = () => {
     setErrorMessage(""); // Clear any previous errors
 
     try {
-      const response = await axios.post("http://127.0.0.1:3000/users", {
+      const response = await api.post("/users", {
         user: {
           name,
           password,
