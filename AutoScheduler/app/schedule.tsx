@@ -1,6 +1,7 @@
 import TabBar from "../components/TabBar";
 import React, { useState } from "react";
 import axios from "axios";
+import api from '../api/api';
 import {
   View,
   Text,
@@ -60,7 +61,7 @@ export default function ScheduleScreen() {
 
   const postEvents = async () => {
     try {
-      const response = await axios.post("http://localhost:3000/tasks", {
+      const response = await api.post("/tasks", {
         tasks: events.map(event => ({
           title: event.name,
           start_time: event.start,
