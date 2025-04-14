@@ -21,12 +21,12 @@ const RegisterScreen: React.FC = () => {
           name,
           password,
           email,
-          canvas_token: canvasToken, // Include canvas token in request
+          canvas_api_token: canvasToken, // Include canvas token in request
         },
       });
 
       if (response.status === 201) {
-        router.push("/schedule");
+        router.push("/signin");
       }
     } catch (error) {
       if (axios.isAxiosError(error)) {

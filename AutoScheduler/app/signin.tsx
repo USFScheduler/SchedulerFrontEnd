@@ -1,7 +1,6 @@
 import React, { useState } from "react";
 import { View, Text, TextInput, TouchableOpacity, StyleSheet } from "react-native";
 import { useRouter } from "expo-router";
-import axios from "axios";
 import { saveTokens } from '../utils/tokenStorage'; // Adjust path if needed
 import api from "@/api/api";
 
@@ -38,7 +37,7 @@ const SignInScreen = () => {
   const handleSignIn2 = async () => {
   
     try {
-      const response = await axios.post("http://127.0.0.1:3000/api/v1/login", {
+      const response = await api.post("/login", {
         name: username,
         password,
       });
