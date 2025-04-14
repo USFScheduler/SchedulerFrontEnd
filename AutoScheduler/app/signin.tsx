@@ -1,7 +1,10 @@
 import React, { useState } from "react";
 import { View, Text, TextInput, TouchableOpacity, StyleSheet } from "react-native";
 import { useRouter } from "expo-router";
-import api from "../api/api";
+import axios from "axios";
+import { saveTokens } from '../utils/tokenStorage'; // Adjust path if needed
+import api from "@/api/api";
+
 
 const SignInScreen = () => {
   const router = useRouter();
@@ -33,28 +36,38 @@ const SignInScreen = () => {
   
 
   const handleSignIn2 = async () => {
+  
     try {
-      const response = await api.post("/login", {
-        email: username, // or name: username, depending on your backend
+      const response = await axios.post("http://127.0.0.1:3000/api/v1/login", {
+        name: username,
         password,
       });
   
       const { access_token, refresh_token, user } = response.data;
   
-      console.log("Access:", access_token);
-      console.log("Refresh:", refresh_token);
+      // Save tokens
+      await saveTokens(access_token, refresh_token);
   
-      router.push("/schedule"); // success 🎉
+      router.push("/schedule");
+  
     } catch (err: any) {
-      const errorMessage =
-        err?.response?.data?.error ||
-        err?.response?.data?.errors ||
-        err?.response?.data?.message ||
-        "An error occurred. Please try again.";
   
-      setError(errorMessage);
+      if (err.response?.status === 401) {
+        setError("Invalid credentials. Please try again.");
+      } else {
+        const errorMessage =
+          err?.response?.data?.error ||
+          err?.response?.data?.errors ||
+          err?.response?.data?.message ||
+          "An error occurred. Please try again.";
+  
+        setError(errorMessage);
+      }
     }
   };
+  
+  
+  
   
 
   return (
@@ -77,7 +90,7 @@ const SignInScreen = () => {
         value={password}
         onChangeText={setPassword}
       />
-      <TouchableOpacity style={styles.button} onPress={handleSignIn}>
+      <TouchableOpacity style={styles.button} onPress={handleSignIn2}>
         <Text style={styles.buttonText}>Continue</Text>
       </TouchableOpacity>
       <TouchableOpacity onPress={() => router.push("/register")} style={styles.registerButton}>
