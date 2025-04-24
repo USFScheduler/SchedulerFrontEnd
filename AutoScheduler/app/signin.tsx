@@ -3,6 +3,9 @@ import { View, Text, TextInput, TouchableOpacity, StyleSheet } from "react-nativ
 import { useRouter } from "expo-router";
 import { saveTokens } from '../utils/tokenStorage'; // Adjust path if needed
 import api from "@/api/api";
+import { saveUserId } from "../utils/tokenStorage";
+
+
 
 
 const SignInScreen = () => {
@@ -46,6 +49,10 @@ const SignInScreen = () => {
   
       // Save tokens
       await saveTokens(access_token, refresh_token);
+
+      await saveTokens(access_token, refresh_token);
+
+      await saveUserId(user.id); // Save the user ID
   
       router.push("/schedule");
   
