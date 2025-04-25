@@ -11,6 +11,7 @@ import {
   StyleSheet,
 } from "react-native";
 import { useRouter } from "expo-router";
+import { getUserId } from "../utils/tokenStorage";
 
 //Define the shape of an Event
 type Event = {
@@ -59,32 +60,39 @@ export default function ScheduleScreen() {
     setEvents(updated);
   };
 
-  const postEvents = async () => {
-    try {
-      const response = await api.post("/tasks", {
-        tasks: events.map(event => ({
-          title: event.name,
-          start_time: event.start,
-          end_time: event.end,
-          am_start: event.amStart,
-          am_end: event.amEnd,
-          days_of_week: event.days,
-        })),
-      });
-      console.log("Schedule submitted successfully:", response.data);
-      alert("Schedule submitted successfully!");
-    } catch (error) {
-      // Check if the error is an AxiosError
-      if (axios.isAxiosError(error)) {
-        console.error("Axios error:", error.response?.data || error.message);
-        alert(`Failed to submit schedule: ${error.response?.data?.message || error.message}`);
-      } else {
-        // Handle generic errors
-        console.error("Unexpected error:", error);
-        alert("An unexpected error occurred. Please try again.");
-      }
+const postEvents = async () => {
+  try {
+    const user_id = await getUserId();
+
+    if (!user_id) {
+      throw new Error("User ID is missing. Cannot post events without a valid user.");
     }
-  };
+
+    const response = await api.post("/tasks", {
+      tasks: events.map(event => ({
+        title: event.name,
+        start_time: event.start,
+        end_time: event.end,
+        am_start: event.amStart,
+        am_end: event.amEnd,
+        days_of_week: event.days,
+        user_id: parseInt(user_id),
+      })),
+    });
+
+    console.log("Schedule submitted successfully:", response.data);
+    alert("Schedule submitted successfully!");
+  } catch (error) {
+    if (axios.isAxiosError(error)) {
+      console.error("Axios error:", error.response?.data || error.message);
+      alert(`Failed to submit schedule: ${error.response?.data?.message || error.message}`);
+    } else {
+      console.error("Unexpected error:", error);
+      alert(error instanceof Error ? error.message : "An unexpected error occurred. Please try again.");
+    }
+  }
+};
+
 
 
   return (

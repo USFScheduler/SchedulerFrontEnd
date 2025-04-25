@@ -40,3 +40,11 @@ export const clearTokens = async () => {
   await storage.deleteItem("access_token");
   await storage.deleteItem("refresh_token");
 };
+
+export const saveUserId = async (userId: number) => {
+  await storage.setItem("user_id", userId.toString());
+};
+
+export const getUserId = async (): Promise<string | null> => {
+  return await storage.getItem("user_id");
+};
