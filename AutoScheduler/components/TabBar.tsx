@@ -41,7 +41,7 @@ const AppNavBar: React.FC = () => {
       </TouchableOpacity>
 
       {/* Settings */}
-      <TouchableOpacity style={styles.navButton} onPress={() => {}}>
+      <TouchableOpacity style={styles.navButton} onPress={() => router.push('/settings')}>
         <Settings size={24} />
         <Text style={styles.navButtonText}>Settings</Text>
       </TouchableOpacity>

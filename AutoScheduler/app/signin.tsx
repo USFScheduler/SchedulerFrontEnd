@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { View, Text, TextInput, TouchableOpacity, StyleSheet } from "react-native";
 import { useRouter } from "expo-router";
-import { saveTokens, saveUserId, saveUsername } from '../utils/tokenStorage'; // Updated import
+import { saveTokens, saveUserId, saveUserInfo } from '../utils/tokenStorage';
 import api from "@/api/api";
 
 const SignInScreen = () => {
@@ -22,7 +22,7 @@ const SignInScreen = () => {
       // Save tokens
       await saveTokens(access_token, refresh_token);
       await saveUserId(user.id);
-      await saveUsername(user.name);  // Save username too!
+      await saveUserInfo(user.name, user.email);
 
       router.push("/home");
 
