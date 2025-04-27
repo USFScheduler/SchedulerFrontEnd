@@ -1,192 +1,152 @@
-// app/calendar.tsx (was EmptyScreen.tsx)
-
-import React, { useEffect, useState } from "react";
-import { View, Text, StyleSheet, ActivityIndicator, FlatList } from "react-native";
+import React, { useState, useEffect } from "react";
+import { View, Text, StyleSheet, ActivityIndicator } from "react-native";
 import { Calendar } from "react-native-calendars";
+import { parseISO, isSameDay, format } from "date-fns";
 import api from "../api/api";
 import { getUserId } from "../utils/tokenStorage";
-import TabBar from "../components/TabBar";
+
+interface Assignment {
+  id: number;
+  title: string;
+  deadline: string | null;
+  type: "assignment";
+}
 
 interface Task {
   id: number;
   title: string;
   start_date: string | null;
-  end_date: string | null;
-  start_time: string | null;
-  end_time: string | null;
-  days_of_week: string[] | null;
-  user_id?: number;
+  type: "task";
 }
 
+type ListItem = Assignment | Task;
+
 export default function CalendarScreen() {
-  const [tasks, setTasks] = useState<Task[]>([]);
-  const [markedDates, setMarkedDates] = useState({});
-  const [selectedDate, setSelectedDate] = useState<string>("");
   const [loading, setLoading] = useState(true);
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [assignments, setAssignments] = useState<Assignment[]>([]);
+  const [markedDates, setMarkedDates] = useState<{ [date: string]: any }>({});
+  const [selectedDate, setSelectedDate] = useState<string>(format(new Date(), "yyyy-MM-dd"));
 
   useEffect(() => {
-    fetchTasks();
+    fetchData();
   }, []);
 
-  const fetchTasks = async () => {
+  const fetchData = async () => {
     try {
+      setLoading(true);
       const userId = await getUserId();
-      if (!userId) throw new Error("User not found");
-      const response = await api.get(`/tasks_by_user?user_id=${userId}`);
+      if (!userId) throw new Error("User ID not found");
 
-      if (response.status === 200) {
-        const fetchedTasks = response.data;
-        setTasks(fetchedTasks);
-        generateMarkedDates(fetchedTasks);
-      } else {
-        console.error("Failed to fetch tasks");
-      }
+      const [tasksRes, assignmentsRes] = await Promise.all([
+        api.get(`/tasks_by_user?user_id=${userId}`),
+        api.get(`/canvas/upcoming_assignments?user_id=${userId}`)
+      ]);
+
+      const fetchedTasks = tasksRes.data.map((t: any) => ({ ...t, type: "task" as const }));
+      const fetchedAssignments = assignmentsRes.data.map((a: any, index: number) => ({ ...a, id: index, type: "assignment" as const }));
+
+      setTasks(fetchedTasks);
+      setAssignments(fetchedAssignments);
+
+      // 💥 Important: Now we set the dots
+      const allItems = [...fetchedTasks, ...fetchedAssignments];
+      const marks = generateMarkedDates(allItems);
+      setMarkedDates(marks);
+
     } catch (error) {
-      console.error("Error fetching tasks:", error);
+      console.error("Error fetching tasks or assignments:", error);
     } finally {
       setLoading(false);
     }
   };
 
-  const generateMarkedDates = (tasks: Task[]) => {
-    const marks: any = {};
-  
-    tasks.forEach(task => {
-      if (!task.start_date) return;
-  
-      const start = new Date(task.start_date);
-      const end = task.end_date ? new Date(task.end_date) : start;
-  
-      // If task has days_of_week (repeating task)
-      if (task.days_of_week && task.days_of_week.length > 0) {
-        const dayMap: Record<string, number> = {
-          "Sun": 0,
-          "M": 1,
-          "T": 2,
-          "W": 3,
-          "TH": 4,
-          "F": 5,
-          "S": 6,
-        };
-  
-        let current = new Date(start);
-  
-        while (current <= end) {
-          const dayNum = current.getDay(); // 0 = Sunday, 1 = Monday, etc.
-  
-          // Check if today's day matches any in task.days_of_week
-          const match = task.days_of_week.some(day => dayMap[day] === dayNum);
-  
-          if (match) {
-            const dateKey = current.toISOString().split("T")[0];
-            if (!marks[dateKey]) {
-              marks[dateKey] = { marked: true, dots: [{ color: "blue" }] };
-            }
-          }
-  
-          // Move to next day
-          current.setDate(current.getDate() + 1);
-        }
-      } else {
-        // If no repeat days, just mark start_date
-        const dateKey = start.toISOString().split("T")[0];
+  const generateMarkedDates = (items: ListItem[]) => {
+    const marks: { [date: string]: any } = {};
+
+    items.forEach(item => {
+      let dateKey: string | null = null;
+
+      if (item.type === "assignment" && item.deadline) {
+        dateKey = format(parseISO(item.deadline), "yyyy-MM-dd");
+      } else if (item.type === "task" && item.start_date) {
+        dateKey = format(parseISO(item.start_date), "yyyy-MM-dd");
+      }
+
+      if (dateKey) {
         if (!marks[dateKey]) {
-          marks[dateKey] = { marked: true, dots: [{ color: "blue" }] };
+          marks[dateKey] = { marked: true, dots: [{ color: "#007bff" }] };
         }
       }
     });
-  
-    setMarkedDates(marks);
-  };
-  
 
-  const getTasksForDate = (date: string): Task[] => {
-    return tasks.filter(task => task.start_date && task.start_date.startsWith(date));
+    return marks;
+  };
+
+  const getItemsForDate = (date: string): ListItem[] => {
+    const tasksToday = tasks.filter(t => t.start_date && isSameDay(parseISO(t.start_date), parseISO(date)));
+    const assignmentsToday = assignments.filter(a => a.deadline && isSameDay(parseISO(a.deadline), parseISO(date)));
+    return [...tasksToday, ...assignmentsToday];
+  };
+
+  const renderItems = () => {
+    const items = getItemsForDate(selectedDate);
+
+    if (items.length === 0) {
+      return <Text style={styles.noItems}>No tasks or assignments for this day.</Text>;
+    }
+
+    return items.map((item) => (
+      <View key={`${item.type}-${item.id}`} style={styles.itemContainer}>
+        <Text style={styles.itemTitle}>{item.title}</Text>
+        {item.type === "assignment" && (
+          <Text style={styles.itemType}>Canvas Assignment</Text>
+        )}
+        {item.type === "task" && (
+          <Text style={styles.itemType}>User Task</Text>
+        )}
+      </View>
+    ));
   };
 
   if (loading) {
     return (
       <View style={styles.centered}>
-        <ActivityIndicator size="large" color="#0000ff" />
-        <Text>Loading calendar...</Text>
+        <ActivityIndicator size="large" color="#0066cc" />
       </View>
     );
   }
 
-  const tasksForSelectedDate = selectedDate ? getTasksForDate(selectedDate) : [];
-
   return (
     <View style={styles.container}>
       <Calendar
-        onDayPress={(day: { dateString: string }) => setSelectedDate(day.dateString)}
         markedDates={{
           ...markedDates,
-          ...(selectedDate ? { [selectedDate]: { selected: true, marked: true, selectedColor: "black" } } : {})
+          [selectedDate]: {
+            ...(markedDates[selectedDate] || {}),
+            selected: true,
+            selectedColor: "#0066cc",
+          },
         }}
+        onDayPress={(day: { dateString: string }) => setSelectedDate(day.dateString)}
       />
 
-      {selectedDate ? (
-        <View style={styles.taskList}>
-          <Text style={styles.tasksHeader}>Tasks for {selectedDate}:</Text>
-          {tasksForSelectedDate.length > 0 ? (
-            <FlatList
-              data={tasksForSelectedDate}
-              keyExtractor={(item) => item.id.toString()}
-              renderItem={({ item }) => (
-                <View style={styles.taskItem}>
-                  <Text style={styles.taskTitle}>{item.title}</Text>
-                </View>
-              )}
-            />
-          ) : (
-            <Text style={styles.noTasks}>No tasks for this day.</Text>
-          )}
-        </View>
-      ) : (
-        <Text style={styles.noDateSelected}>Select a date to view tasks</Text>
-      )}
-      
-      <TabBar />
+
+      <View style={styles.itemsContainer}>
+        <Text style={styles.itemsHeader}>Items for {selectedDate}:</Text>
+        {renderItems()}
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#fff",
-  },
-  taskList: {
-    padding: 16,
-    flex: 1,
-  },
-  tasksHeader: {
-    fontSize: 18,
-    fontWeight: "bold",
-    marginBottom: 10,
-  },
-  taskItem: {
-    paddingVertical: 8,
-    borderBottomColor: "#ccc",
-    borderBottomWidth: 1,
-  },
-  taskTitle: {
-    fontSize: 16,
-  },
-  centered: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  noTasks: {
-    fontSize: 16,
-    color: "#999",
-    textAlign: "center",
-    marginTop: 20,
-  },
-  noDateSelected: {
-    textAlign: "center",
-    color: "#999",
-    marginTop: 10,
-  },
+  container: { flex: 1, backgroundColor: "#fff", paddingTop: 16 },
+  centered: { flex: 1, justifyContent: "center", alignItems: "center" },
+  itemsContainer: { marginTop: 16, paddingHorizontal: 16 },
+  itemsHeader: { fontSize: 18, fontWeight: "bold", marginBottom: 8 },
+  itemContainer: { paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: "#eee" },
+  itemTitle: { fontSize: 16 },
+  itemType: { fontSize: 14, color: "#666" },
+  noItems: { fontSize: 16, color: "#aaa", textAlign: "center", marginTop: 20 },
 });
