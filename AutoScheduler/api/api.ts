@@ -1,14 +1,20 @@
 import axios from 'axios';
+import { Platform } from 'react-native'; // 👈 add this
 import { getAccessToken, getRefreshToken, saveTokens, clearTokens } from '../utils/tokenStorage';
 
+const isMobile = Platform.OS !== 'web'; // true if on iOS or Android Expo Go
+const LOCAL_IP = '192.168.1.11'; // <-- change to your actual computer IP
+const baseURL = isMobile 
+  ? `http://${LOCAL_IP}:3000/api/v1`
+  : 'http://localhost:3000/api/v1'; // 👈 dynamically switch
+
 const api = axios.create({
-  baseURL: 'http://localhost:3000/api/v1', // change to your backend URL
+  baseURL,
   headers: {
     "Content-Type": "application/json",
   },
 });
-
-//Automatically attach access token to each request
+// Automatically attach access token to each request
 api.interceptors.request.use(async (config) => {
   const token = await getAccessToken();
   if (token) {
@@ -17,7 +23,7 @@ api.interceptors.request.use(async (config) => {
   return config;
 });
 
-//Automatically refresh token on 401 error
+// Automatically refresh token on 401 error
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
@@ -33,7 +39,7 @@ api.interceptors.response.use(
       }
 
       try {
-        const res = await axios.post('http://localhost:3000/api/v1/refresh', {
+        const res = await axios.post(`${baseURL.replace('/api/v1', '')}/api/v1/refresh`, {
           refresh_token: refreshToken,
         });
 
