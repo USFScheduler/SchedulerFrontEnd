@@ -51,9 +51,11 @@ export const saveUserId = async (userId: number) => {
   await storage.setItem("user_id", userId.toString());
 };
 
+
 export const getUserId = async (): Promise<string | null> => {
   return await storage.getItem("user_id");
 };
+
 
 // Save and get user info (name + email)
 export const saveUserInfo = async (name: string, email: string) => {
@@ -69,4 +71,9 @@ export const getUserInfo = async (): Promise<{ name: string; email: string } | n
     return { name, email };
   }
   return null;
+};
+
+export const getUsername = async (): Promise<string | null> => {
+  const name = await storage.getItem("user_name");
+  return name;
 };

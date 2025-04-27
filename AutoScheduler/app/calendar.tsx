@@ -1,7 +1,9 @@
+// Updated CalendarScreen.tsx
 import React, { useState, useEffect } from "react";
 import { View, Text, StyleSheet, ActivityIndicator } from "react-native";
 import { Calendar } from "react-native-calendars";
-import { parseISO, isSameDay, format } from "date-fns";
+import { format, parseISO } from "date-fns";
+import DropDownPicker from "react-native-dropdown-picker";
 import api from "../api/api";
 import { getUserId } from "../utils/tokenStorage";
 
@@ -16,6 +18,7 @@ interface Task {
   id: number;
   title: string;
   start_date: string | null;
+  days_of_week: string[] | null;
   type: "task";
 }
 
@@ -23,10 +26,11 @@ type ListItem = Assignment | Task;
 
 export default function CalendarScreen() {
   const [loading, setLoading] = useState(true);
-  const [tasks, setTasks] = useState<Task[]>([]);
-  const [assignments, setAssignments] = useState<Assignment[]>([]);
-  const [markedDates, setMarkedDates] = useState<{ [date: string]: any }>({});
+  const [tasks, setTasks] = useState<ListItem[]>([]);
+  const [markedDates, setMarkedDates] = useState<any>({});
   const [selectedDate, setSelectedDate] = useState<string>(format(new Date(), "yyyy-MM-dd"));
+  const [month, setMonth] = useState<number>(new Date().getMonth() + 1);
+  const [year, setYear] = useState<number>(new Date().getFullYear());
 
   useEffect(() => {
     fetchData();
@@ -34,26 +38,24 @@ export default function CalendarScreen() {
 
   const fetchData = async () => {
     try {
-      setLoading(true);
       const userId = await getUserId();
-      if (!userId) throw new Error("User ID not found");
+      if (!userId) throw new Error("User not found");
 
       const [tasksRes, assignmentsRes] = await Promise.all([
         api.get(`/tasks_by_user?user_id=${userId}`),
-        api.get(`/canvas/upcoming_assignments?user_id=${userId}`)
+        api.get(`/canvas/upcoming_assignments?user_id=${userId}`),
       ]);
 
       const fetchedTasks = tasksRes.data.map((t: any) => ({ ...t, type: "task" as const }));
-      const fetchedAssignments = assignmentsRes.data.map((a: any, index: number) => ({ ...a, id: index, type: "assignment" as const }));
+      const fetchedAssignments = assignmentsRes.data.map((a: any, index: number) => ({
+        ...a,
+        id: index,
+        type: "assignment" as const,
+      }));
 
-      setTasks(fetchedTasks);
-      setAssignments(fetchedAssignments);
-
-      // 💥 Important: Now we set the dots
-      const allItems = [...fetchedTasks, ...fetchedAssignments];
-      const marks = generateMarkedDates(allItems);
-      setMarkedDates(marks);
-
+      const combined = [...fetchedTasks, ...fetchedAssignments];
+      setTasks(combined);
+      generateMarkedDates(combined);
     } catch (error) {
       console.error("Error fetching tasks or assignments:", error);
     } finally {
@@ -63,48 +65,47 @@ export default function CalendarScreen() {
 
   const generateMarkedDates = (items: ListItem[]) => {
     const marks: { [date: string]: any } = {};
-
-    items.forEach(item => {
-      let dateKey: string | null = null;
-
+    items.forEach((item) => {
+      let dateKey = "";
       if (item.type === "assignment" && item.deadline) {
         dateKey = format(parseISO(item.deadline), "yyyy-MM-dd");
-      } else if (item.type === "task" && item.start_date) {
+      }
+      if (item.type === "task" && item.start_date) {
         dateKey = format(parseISO(item.start_date), "yyyy-MM-dd");
       }
-
       if (dateKey) {
-        if (!marks[dateKey]) {
-          marks[dateKey] = { marked: true, dots: [{ color: "#007bff" }] };
-        }
+        marks[dateKey] = {
+          marked: true,
+          dots: [{ color: item.type === "assignment" ? "#3498db" : "#9b59b6" }],
+        };
       }
     });
-
-    return marks;
+    setMarkedDates(marks);
   };
 
-  const getItemsForDate = (date: string): ListItem[] => {
-    const tasksToday = tasks.filter(t => t.start_date && isSameDay(parseISO(t.start_date), parseISO(date)));
-    const assignmentsToday = assignments.filter(a => a.deadline && isSameDay(parseISO(a.deadline), parseISO(date)));
-    return [...tasksToday, ...assignmentsToday];
+  const onMonthChange = (monthNumber: number, yearNumber: number) => {
+    setMonth(monthNumber);
+    setYear(yearNumber);
   };
 
   const renderItems = () => {
-    const items = getItemsForDate(selectedDate);
+    const todayItems = tasks.filter((item) => {
+      if (item.type === "assignment" && item.deadline) {
+        return format(parseISO(item.deadline), "yyyy-MM-dd") === selectedDate;
+      }
+      if (item.type === "task" && item.start_date) {
+        return format(parseISO(item.start_date), "yyyy-MM-dd") === selectedDate;
+      }
+      return false;
+    });
 
-    if (items.length === 0) {
+    if (todayItems.length === 0) {
       return <Text style={styles.noItems}>No tasks or assignments for this day.</Text>;
     }
 
-    return items.map((item) => (
-      <View key={`${item.type}-${item.id}`} style={styles.itemContainer}>
-        <Text style={styles.itemTitle}>{item.title}</Text>
-        {item.type === "assignment" && (
-          <Text style={styles.itemType}>Canvas Assignment</Text>
-        )}
-        {item.type === "task" && (
-          <Text style={styles.itemType}>User Task</Text>
-        )}
+    return todayItems.map((item) => (
+      <View key={`${item.type}-${item.id}`} style={styles.itemBox}>
+        <Text style={styles.itemText}>{item.title}</Text>
       </View>
     ));
   };
@@ -112,7 +113,7 @@ export default function CalendarScreen() {
   if (loading) {
     return (
       <View style={styles.centered}>
-        <ActivityIndicator size="large" color="#0066cc" />
+        <ActivityIndicator size="large" color="#3498db" />
       </View>
     );
   }
@@ -122,15 +123,25 @@ export default function CalendarScreen() {
       <Calendar
         markedDates={{
           ...markedDates,
-          [selectedDate]: {
-            ...(markedDates[selectedDate] || {}),
-            selected: true,
-            selectedColor: "#0066cc",
-          },
+          [selectedDate]: { selected: true, selectedColor: "#00bfff" },
         }}
         onDayPress={(day: { dateString: string }) => setSelectedDate(day.dateString)}
+        monthFormat={"MMMM yyyy"}
+        onMonthChange={(month: { month: number; year: number }) => onMonthChange(month.month, month.year)}
+        hideArrows
+        theme={{
+          selectedDayBackgroundColor: "#00bfff",
+          todayTextColor: "#00bfff",
+          dotColor: "#00bfff",
+          selectedDotColor: "#ffffff",
+          arrowColor: "#00bfff",
+          monthTextColor: "#333",
+          textMonthFontWeight: "bold",
+          textDayFontSize: 16,
+          textMonthFontSize: 18,
+          textDayHeaderFontSize: 14,
+        }}
       />
-
 
       <View style={styles.itemsContainer}>
         <Text style={styles.itemsHeader}>Items for {selectedDate}:</Text>
@@ -141,12 +152,11 @@ export default function CalendarScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#fff", paddingTop: 16 },
+  container: { flex: 1, padding: 10, backgroundColor: "#fff" },
   centered: { flex: 1, justifyContent: "center", alignItems: "center" },
-  itemsContainer: { marginTop: 16, paddingHorizontal: 16 },
-  itemsHeader: { fontSize: 18, fontWeight: "bold", marginBottom: 8 },
-  itemContainer: { paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: "#eee" },
-  itemTitle: { fontSize: 16 },
-  itemType: { fontSize: 14, color: "#666" },
-  noItems: { fontSize: 16, color: "#aaa", textAlign: "center", marginTop: 20 },
+  itemsContainer: { marginTop: 20 },
+  itemsHeader: { fontWeight: "bold", fontSize: 18, marginBottom: 10 },
+  noItems: { textAlign: "center", color: "#888", marginTop: 20 },
+  itemBox: { padding: 10, marginVertical: 5, backgroundColor: "#f1f1f1", borderRadius: 5 },
+  itemText: { fontSize: 16 },
 });
