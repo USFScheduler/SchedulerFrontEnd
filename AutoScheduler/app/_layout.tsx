@@ -4,7 +4,7 @@ import { ThemeProvider } from "../components/ThemeContext"; // ✅ ThemeProvider
 
 export default function RootLayout() {
   return (
-    <ThemeProvider> {/* Wrap everything inside ThemeProvider */}
+    <ThemeProvider> 
       <Stack
         screenOptions={{
           headerShown: false,

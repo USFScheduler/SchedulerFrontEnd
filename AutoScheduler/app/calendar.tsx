@@ -1,245 +1,153 @@
-import React, { useState, useEffect } from "react";
-import { View, Text, StyleSheet, ActivityIndicator, FlatList, Animated, ScrollView } from "react-native";
+import React, { useEffect, useState } from "react";
+import { View, Text, StyleSheet, ActivityIndicator, FlatList } from "react-native";
 import { Calendar } from "react-native-calendars";
-import { format, parseISO } from "date-fns";
 import api from "../api/api";
 import { getUserId } from "../utils/tokenStorage";
 import TabBar from "../components/TabBar";
-
-interface Assignment {
-  id: number;
-  title: string;
-  deadline: string | null;
-  type: "assignment";
-}
+import { useTheme } from "../components/ThemeContext"; // <-- Added
 
 interface Task {
   id: number;
   title: string;
   start_date: string | null;
-  days_of_week: string[] | null;
+  end_date: string | null;
   start_time: string | null;
   end_time: string | null;
-  am_start?: boolean;
-  am_end?: boolean;
-  type: "task";
+  days_of_week: string[] | null;
+  user_id?: number;
 }
 
-type ListItem = Assignment | Task;
-
 export default function CalendarScreen() {
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [markedDates, setMarkedDates] = useState({});
+  const [selectedDate, setSelectedDate] = useState<string>("");
   const [loading, setLoading] = useState(true);
-  const [tasks, setTasks] = useState<ListItem[]>([]);
-  const [markedDates, setMarkedDates] = useState<any>({});
-  const [selectedDate, setSelectedDate] = useState<string>(format(new Date(), "yyyy-MM-dd"));
-  const [bounceAnims, setBounceAnims] = useState<Animated.Value[]>([]);
+
+  const { theme } = useTheme(); // <-- Grab theme
 
   useEffect(() => {
-    fetchData();
+    fetchTasks();
   }, []);
 
-  const fetchData = async () => {
+  const fetchTasks = async () => {
     try {
       const userId = await getUserId();
       if (!userId) throw new Error("User not found");
+      const response = await api.get(`/tasks_by_user?user_id=${userId}`);
 
-      const [tasksRes, assignmentsRes] = await Promise.all([
-        api.get(`/tasks_by_user?user_id=${userId}`),
-        api.get(`/canvas/upcoming_assignments?user_id=${userId}`),
-      ]);
-
-      const fetchedTasks = tasksRes.data.map((t: any) => ({ ...t, type: "task" as const }));
-      const fetchedAssignments = assignmentsRes.data.map((a: any, index: number) => ({
-        ...a,
-        id: index,
-        type: "assignment" as const,
-      }));
-
-      const combined = [...fetchedTasks, ...fetchedAssignments];
-      setTasks(combined);
-      generateMarkedDates(combined);
+      if (response.status === 200) {
+        const fetchedTasks = response.data;
+        setTasks(fetchedTasks);
+        generateMarkedDates(fetchedTasks);
+      } else {
+        console.error("Failed to fetch tasks");
+      }
     } catch (error) {
-      console.error("Error fetching tasks or assignments:", error);
+      console.error("Error fetching tasks:", error);
     } finally {
       setLoading(false);
     }
   };
 
-  const generateMarkedDates = (items: ListItem[]) => {
-    const marks: { [date: string]: { dots: { color: string }[] } } = {};
-    const today = new Date();
+  const generateMarkedDates = (tasks: Task[]) => {
+    const marks: any = {};
 
-    items.forEach((item) => {
-      let datesToMark: string[] = [];
+    tasks.forEach(task => {
+      if (!task.start_date) return;
 
-      if (item.type === "assignment" && item.deadline) {
-        datesToMark.push(format(parseISO(item.deadline), "yyyy-MM-dd"));
-      }
+      const start = new Date(task.start_date);
+      const end = task.end_date ? new Date(task.end_date) : start;
 
-      if (item.type === "task") {
-        if (item.start_date) {
-          datesToMark.push(format(parseISO(item.start_date), "yyyy-MM-dd"));
-        }
-        if (item.days_of_week && item.days_of_week.length > 0) {
-          for (let i = 0; i < 30; i++) {
-            const futureDate = new Date(today);
-            futureDate.setDate(today.getDate() + i);
-            const abbrev = getDayAbbreviation(futureDate);
+      if (task.days_of_week && task.days_of_week.length > 0) {
+        const dayMap: Record<string, number> = {
+          "Sun": 0,
+          "M": 1,
+          "T": 2,
+          "W": 3,
+          "TH": 4,
+          "F": 5,
+          "S": 6,
+        };
 
-            if (item.days_of_week.includes(abbrev)) {
-              const dateKey = format(futureDate, "yyyy-MM-dd");
-              datesToMark.push(dateKey);
+        let current = new Date(start);
+
+        while (current <= end) {
+          const dayNum = current.getDay();
+          const match = task.days_of_week.some(day => dayMap[day] === dayNum);
+
+          if (match) {
+            const dateKey = current.toISOString().split("T")[0];
+            if (!marks[dateKey]) {
+              marks[dateKey] = { marked: true, dots: [{ color: "blue" }] };
             }
           }
+
+          current.setDate(current.getDate() + 1);
+        }
+      } else {
+        const dateKey = start.toISOString().split("T")[0];
+        if (!marks[dateKey]) {
+          marks[dateKey] = { marked: true, dots: [{ color: "blue" }] };
         }
       }
-
-      datesToMark = [...new Set(datesToMark)];
-
-      datesToMark.forEach((dateKey) => {
-        if (!marks[dateKey]) marks[dateKey] = { dots: [] };
-
-        const color = item.type === "assignment" ? "#3498db" : "#9b59b6";
-
-        if (!marks[dateKey].dots.find(dot => dot.color === color)) {
-          marks[dateKey].dots.push({ color });
-        }
-      });
     });
 
     setMarkedDates(marks);
   };
 
-  const getDayAbbreviation = (date: Date) => {
-    const days = ["SU", "M", "T", "W", "TH", "F", "S"];
-    return days[date.getDay()];
-  };
-
-  const todayItems = tasks.filter((item) => {
-    if (item.type === "assignment" && item.deadline) {
-      return format(parseISO(item.deadline), "yyyy-MM-dd") === selectedDate;
-    }
-    if (item.type === "task") {
-      if (item.start_date && format(parseISO(item.start_date), "yyyy-MM-dd") === selectedDate) {
-        return true;
-      }
-      if (item.days_of_week && item.days_of_week.includes(getDayAbbreviation(new Date(selectedDate)))) {
-        return true;
-      }
-    }
-    return false;
-  }).sort((a, b) => {
-    const getTime = (item: ListItem) => {
-      if (item.type === "task" && item.start_time) {
-        const [h, m] = item.start_time.split(":").map(Number);
-        return h * 60 + m;
-      }
-      return 0;
-    };
-    return getTime(a) - getTime(b);
-  });
-
-  useEffect(() => {
-    const anims = todayItems.map(() => new Animated.Value(0));
-    setBounceAnims(anims);
-
-    Animated.stagger(100, anims.map(anim => 
-      Animated.spring(anim, {
-        toValue: 1,
-        useNativeDriver: true,
-        bounciness: 12,
-      })
-    )).start();
-  }, [selectedDate, tasks.length]);
-
-  const formatItemTime = (item: ListItem) => {
-    if (item.type === "task" && item.start_time) {
-      const [h, m] = item.start_time.split(":").map(Number);
-      const ampm = (item.am_start ?? (h < 12)) ? "AM" : "PM";
-      const displayHour = h % 12 === 0 ? 12 : h % 12;
-      return `${displayHour}:${m.toString().padStart(2, '0')} ${ampm}`;
-    }
-    return null;
-  };
-
-  const renderItem = ({ item, index }: { item: ListItem; index: number }) => {
-    const scale = bounceAnims[index] || new Animated.Value(1);
-    const dueToday = item.type === "assignment";
-
-    return (
-      <Animated.View
-        style={{
-          transform: [{ scale }],
-          marginVertical: 6,
-          padding: 12,
-          borderRadius: 8,
-          backgroundColor: item.type === "assignment" ? "#e8f4ff" : "#f9f7ff",
-          shadowColor: "#000",
-          shadowOpacity: 0.1,
-          shadowRadius: 3,
-          elevation: 2,
-        }}
-      >
-        <View style={styles.badgeContainer}>
-          <Text style={[styles.badge, item.type === "assignment" ? styles.badgeBlue : styles.badgePurple]}>
-            {item.type === "assignment" ? "Canvas" : "Task"}
-          </Text>
-        </View>
-        <Text style={styles.itemTitle}>{item.title}</Text>
-        {dueToday && item.deadline && (
-          <Text style={styles.dueText}>Due today by {format(parseISO(item.deadline), "h:mm a")}</Text>
-        )}
-        {!dueToday && formatItemTime(item) && (
-          <Text style={styles.dueText}>{formatItemTime(item)}</Text>
-        )}
-      </Animated.View>
-    );
+  const getTasksForDate = (date: string): Task[] => {
+    return tasks.filter(task => task.start_date && task.start_date.startsWith(date));
   };
 
   if (loading) {
     return (
-      <View style={styles.centered}>
-        <ActivityIndicator size="large" color="#3498db" />
+      <View style={[styles.centered, { backgroundColor: theme.backgroundColor }]}> {/* dark mode bg */}
+        <ActivityIndicator size="large" color="#0000ff" />
+        <Text style={{ color: theme.textColor }}>Loading calendar...</Text>
       </View>
     );
   }
 
-  return (
-    <View style={{ flex: 1 }}>
-      <ScrollView contentContainerStyle={{ flexGrow: 1 }}>
-        <Calendar
-          markedDates={{
-            ...markedDates,
-            [selectedDate]: { ...(markedDates[selectedDate] || {}), selected: true, selectedColor: "#00bfff" },
-          }}
-          markingType={"multi-dot"}
-          onDayPress={(day: { dateString: string }) => setSelectedDate(day.dateString)}
-          monthFormat={"MMMM yyyy"}
-          hideArrows
-          theme={{
-            selectedDayBackgroundColor: "#00bfff",
-            todayTextColor: "#00bfff",
-            dotColor: "#00bfff",
-            selectedDotColor: "#ffffff",
-            arrowColor: "#00bfff",
-            monthTextColor: "#333",
-            textMonthFontWeight: "bold",
-            textDayFontSize: 16,
-            textMonthFontSize: 18,
-            textDayHeaderFontSize: 14,
-          }}
-        />
+  const tasksForSelectedDate = selectedDate ? getTasksForDate(selectedDate) : [];
 
-        <View style={styles.itemsContainer}>
-          <Text style={styles.itemsHeader}>Items for {selectedDate}:</Text>
-          <FlatList
-            data={todayItems}
-            renderItem={renderItem}
-            keyExtractor={(item) => `${item.type}-${item.id}`}
-            contentContainerStyle={{ paddingBottom: 80 }}
-          />
+  return (
+    <View style={[styles.container, { backgroundColor: theme.backgroundColor }]}> {/* dark mode bg */}
+      <Calendar
+        theme={{
+          calendarBackground: theme.backgroundColor,
+          dayTextColor: theme.textColor,
+          monthTextColor: theme.textColor,
+          textSectionTitleColor: theme.textColor,
+          selectedDayBackgroundColor: theme.buttonColor,
+          selectedDayTextColor: theme.buttonTextColor,
+        }}
+        onDayPress={(day: { dateString: string }) => setSelectedDate(day.dateString)}
+        markedDates={{
+          ...markedDates,
+          ...(selectedDate ? { [selectedDate]: { selected: true, marked: true, selectedColor: theme.buttonColor } } : {})
+        }}
+      />
+
+      {selectedDate ? (
+        <View style={styles.taskList}>
+          <Text style={[styles.tasksHeader, { color: theme.textColor }]}>Tasks for {selectedDate}:</Text>
+          {tasksForSelectedDate.length > 0 ? (
+            <FlatList
+              data={tasksForSelectedDate}
+              keyExtractor={(item) => item.id.toString()}
+              renderItem={({ item }) => (
+                <View style={styles.taskItem}>
+                  <Text style={[styles.taskTitle, { color: theme.textColor }]}>{item.title}</Text>
+                </View>
+              )}
+            />
+          ) : (
+            <Text style={[styles.noTasks, { color: theme.textColor }]}>No tasks for this day.</Text>
+          )}
         </View>
-      </ScrollView>
+      ) : (
+        <Text style={[styles.noDateSelected, { color: theme.textColor }]}>Select a date to view tasks</Text>
+      )}
 
       <TabBar />
     </View>
@@ -247,13 +155,38 @@ export default function CalendarScreen() {
 }
 
 const styles = StyleSheet.create({
-  centered: { flex: 1, justifyContent: "center", alignItems: "center" },
-  itemsContainer: { paddingHorizontal: 16, paddingTop: 12 },
-  itemsHeader: { fontWeight: "bold", fontSize: 18, marginBottom: 10 },
-  badgeContainer: { position: "absolute", top: 8, right: 8 },
-  badge: { fontSize: 10, fontWeight: "bold", padding: 4, borderRadius: 4, overflow: "hidden" },
-  badgePurple: { backgroundColor: "#9b59b6", color: "#fff" },
-  badgeBlue: { backgroundColor: "#3498db", color: "#fff" },
-  itemTitle: { fontSize: 16, fontWeight: "bold", color: "#333", marginBottom: 4 },
-  dueText: { fontSize: 13, color: "#555" },
+  container: {
+    flex: 1,
+  },
+  taskList: {
+    padding: 16,
+    flex: 1,
+  },
+  tasksHeader: {
+    fontSize: 18,
+    fontWeight: "bold",
+    marginBottom: 10,
+  },
+  taskItem: {
+    paddingVertical: 8,
+    borderBottomColor: "#ccc",
+    borderBottomWidth: 1,
+  },
+  taskTitle: {
+    fontSize: 16,
+  },
+  centered: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  noTasks: {
+    fontSize: 16,
+    textAlign: "center",
+    marginTop: 20,
+  },
+  noDateSelected: {
+    textAlign: "center",
+    marginTop: 10,
+  },
 });

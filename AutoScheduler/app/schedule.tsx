@@ -2,18 +2,12 @@ import TabBar from "../components/TabBar";
 import React, { useState } from "react";
 import axios from "axios";
 import api from '../api/api';
-import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  ScrollView,
-  StyleSheet,
-} from "react-native";
+import { View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet } from "react-native";
 import { useRouter } from "expo-router";
 import { getUserId } from "../utils/tokenStorage";
+import { useTheme } from "../components/ThemeContext";
 
-//Define the shape of an Event
+// Define the shape of an Event
 type Event = {
   name: string;
   start: string;
@@ -27,6 +21,7 @@ const daysOfWeek = ["M", "T", "W", "TH", "F", "S", "SU"];
 
 export default function ScheduleScreen() {
   const router = useRouter();
+  const { theme, darkMode } = useTheme();
 
   const [events, setEvents] = useState<Event[]>([
     { name: "", start: "", end: "", amStart: true, amEnd: true, days: [] },
@@ -60,241 +55,146 @@ export default function ScheduleScreen() {
     setEvents(updated);
   };
 
-const postEvents = async () => {
-  try {
-    const user_id = await getUserId();
+  const postEvents = async () => {
+    try {
+      const user_id = await getUserId();
+      if (!user_id) throw new Error("User ID is missing.");
 
-    if (!user_id) {
-      throw new Error("User ID is missing. Cannot post events without a valid user.");
+      const response = await api.post("/tasks", {
+        tasks: events.map(event => ({
+          title: event.name,
+          start_time: event.start,
+          end_time: event.end,
+          am_start: event.amStart,
+          am_end: event.amEnd,
+          days_of_week: event.days,
+          user_id: parseInt(user_id),
+        })),
+      });
+
+      console.log("Schedule submitted successfully:", response.data);
+      alert("Schedule submitted successfully!");
+    } catch (error) {
+      if (axios.isAxiosError(error)) {
+        console.error("Axios error:", error.response?.data || error.message);
+        alert(`Failed to submit schedule: ${error.response?.data?.message || error.message}`);
+      } else {
+        console.error("Unexpected error:", error);
+        alert(error instanceof Error ? error.message : "An error occurred.");
+      }
     }
-
-    const response = await api.post("/tasks", {
-      tasks: events.map(event => ({
-        title: event.name,
-        start_time: event.start,
-        end_time: event.end,
-        am_start: event.amStart,
-        am_end: event.amEnd,
-        days_of_week: event.days,
-        user_id: parseInt(user_id),
-      })),
-    });
-
-    console.log("Schedule submitted successfully:", response.data);
-    alert("Schedule submitted successfully!");
-  } catch (error) {
-    if (axios.isAxiosError(error)) {
-      console.error("Axios error:", error.response?.data || error.message);
-      alert(`Failed to submit schedule: ${error.response?.data?.message || error.message}`);
-    } else {
-      console.error("Unexpected error:", error);
-      alert(error instanceof Error ? error.message : "An unexpected error occurred. Please try again.");
-    }
-  }
-};
-
-
+  };
 
   return (
-  <View style={{ flex: 1 }}>
-    <ScrollView contentContainerStyle={styles.container}>
-      <Text style={styles.title}>Add Your Current Schedule</Text>
+    <View style={{ flex: 1, backgroundColor: theme.backgroundColor }}>
+      <ScrollView contentContainerStyle={[styles.container, { backgroundColor: theme.backgroundColor }]}> 
+        <Text style={[styles.title, { color: theme.textColor }]}>Add Your Current Schedule</Text>
 
-      {events.map((event, index) => (
-        <View key={index} style={styles.eventBox}>
-          <TextInput
-            placeholder="Event Name"
-            placeholderTextColor="#999"
-            style={styles.input}
-            value={event.name}
-            onChangeText={(text) => updateEvent(index, "name", text)}
-          />
-
-          <View style={styles.row}>
+        {events.map((event, index) => (
+          <View key={index} style={[styles.eventBox, { backgroundColor: theme.cardColor }]}>
             <TextInput
-              placeholder="Start Time (HH:MM)"
-              placeholderTextColor="#999"
-              style={styles.inputHalf}
-              value={event.start}
-              onChangeText={(text) => updateEvent(index, "start", text)}
+              placeholder="Event Name"
+              placeholderTextColor={theme.placeholderColor}
+              style={[styles.input, { backgroundColor: theme.cardColor, color: theme.textColor, borderColor: theme.navBarBorderColor }]}
+              value={event.name}
+              onChangeText={(text) => updateEvent(index, "name", text)}
             />
-            <View style={styles.amPm}>
-              <Text>AM</Text>
-              <TouchableOpacity
-                onPress={() => toggleAmPm(index, "amStart")}
-                style={[
-                  styles.checkbox,
-                  event.amStart && styles.checkedBox,
-                ]}
-              />
-              <Text>PM</Text>
-              <TouchableOpacity
-                onPress={() => toggleAmPm(index, "amStart")}
-                style={[
-                  styles.checkbox,
-                  !event.amStart && styles.checkedBox,
-                ]}
-              />
-            </View>
-          </View>
 
-          <View style={styles.row}>
-            <TextInput
-              placeholder="End Time (HH:MM)"
-              placeholderTextColor="#999"
-              style={styles.inputHalf}
-              value={event.end}
-              onChangeText={(text) => updateEvent(index, "end", text)}
-            />
-            <View style={styles.amPm}>
-              <Text>AM</Text>
-              <TouchableOpacity
-                onPress={() => toggleAmPm(index, "amEnd")}
-                style={[
-                  styles.checkbox,
-                  event.amEnd && styles.checkedBox,
-                ]}
+            <View style={styles.row}>
+              <TextInput
+                placeholder="Start Time (HH:MM)"
+                placeholderTextColor={theme.placeholderColor}
+                style={[styles.inputHalf, { backgroundColor: theme.cardColor, color: theme.textColor, borderColor: theme.navBarBorderColor }]}
+                value={event.start}
+                onChangeText={(text) => updateEvent(index, "start", text)}
               />
-              <Text>PM</Text>
-              <TouchableOpacity
-                onPress={() => toggleAmPm(index, "amEnd")}
-                style={[
-                  styles.checkbox,
-                  !event.amEnd && styles.checkedBox,
-                ]}
-              />
-            </View>
-          </View>
-
-          <View style={styles.daysRow}>
-            <Text style={{ marginBottom: 5 }}>Days:</Text>
-            <View style={styles.dayPills}>
-              {daysOfWeek.map((day) => (
+              <View style={styles.amPm}>
+                <Text style={{ color: theme.textColor }}>AM</Text>
                 <TouchableOpacity
-                  key={day}
-                  onPress={() => toggleDay(index, day)}
-                  style={[
-                    styles.day,
-                    event.days.includes(day) && styles.daySelected,
-                  ]}
-                >
-                  <Text
-                    style={
-                      event.days.includes(day) ? styles.dayTextSelected : {}
-                    }
+                  onPress={() => toggleAmPm(index, "amStart")}
+                  style={[styles.checkbox, event.amStart && styles.checkedBox]}
+                />
+                <Text style={{ color: theme.textColor }}>PM</Text>
+                <TouchableOpacity
+                  onPress={() => toggleAmPm(index, "amStart")}
+                  style={[styles.checkbox, !event.amStart && styles.checkedBox]}
+                />
+              </View>
+            </View>
+
+            <View style={styles.row}>
+              <TextInput
+                placeholder="End Time (HH:MM)"
+                placeholderTextColor={theme.placeholderColor}
+                style={[styles.inputHalf, { backgroundColor: theme.cardColor, color: theme.textColor, borderColor: theme.navBarBorderColor }]}
+                value={event.end}
+                onChangeText={(text) => updateEvent(index, "end", text)}
+              />
+              <View style={styles.amPm}>
+                <Text style={{ color: theme.textColor }}>AM</Text>
+                <TouchableOpacity
+                  onPress={() => toggleAmPm(index, "amEnd")}
+                  style={[styles.checkbox, event.amEnd && styles.checkedBox]}
+                />
+                <Text style={{ color: theme.textColor }}>PM</Text>
+                <TouchableOpacity
+                  onPress={() => toggleAmPm(index, "amEnd")}
+                  style={[styles.checkbox, !event.amEnd && styles.checkedBox]}
+                />
+              </View>
+            </View>
+
+            <View style={styles.daysRow}>
+              <Text style={{ color: theme.textColor, marginBottom: 5 }}>Days:</Text>
+              <View style={styles.dayPills}>
+                {daysOfWeek.map((day) => (
+                  <TouchableOpacity
+                    key={day}
+                    onPress={() => toggleDay(index, day)}
+                    style={[styles.day, { backgroundColor: event.days.includes(day) ? (darkMode ? "#ffffff" : "#000000") : (darkMode ? "#333333" : "#dddddd"), borderColor: theme.navBarBorderColor,}]}
                   >
-                    {day}
-                  </Text>
-                </TouchableOpacity>
-              ))}
+                    <Text style={{ color: event.days.includes(day) ? (darkMode ? "#000000" : "#ffffff") : theme.textColor, }}>{day}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
             </View>
           </View>
-        </View>
-      ))}
+        ))}
 
-      <TouchableOpacity style={styles.addButton} onPress={addEvent}>
-        <Text style={styles.addText}>Add Another Event</Text>
-      </TouchableOpacity>
+        <TouchableOpacity style={styles.addButton} onPress={addEvent}>
+          <Text style={[styles.addText, { color: theme.textColor }]}>Add Another Event</Text>
+        </TouchableOpacity>
 
-      <TouchableOpacity
-        style={styles.finalizeButton}
-        onPress={async () => {
-           await postEvents(); // Call the postEvents function to send data to the server
-          router.push("/finalize"); // Navigate to the Finalize screen
-        }}      >
-        <Text style={styles.finalizeText}>Finalize Schedule</Text>
-      </TouchableOpacity>
-    </ScrollView>
-    <TabBar /> 
-  </View>
-
+        <TouchableOpacity
+          style={[styles.finalizeButton, { backgroundColor: theme.buttonColor }]}
+          onPress={async () => {
+            await postEvents();
+            router.push("/finalize");
+          }}
+        >
+          <Text style={[styles.finalizeText, { color: theme.buttonTextColor }]}>Finalize Schedule</Text>
+        </TouchableOpacity>
+      </ScrollView>
+      <TabBar />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { padding: 20 },
   title: { fontSize: 24, fontWeight: "bold", marginBottom: 20 },
-  eventBox: {
-    backgroundColor: "#f4f4f4",
-    padding: 15,
-    borderRadius: 8,
-    marginBottom: 20,
-  },
-  input: {
-    backgroundColor: "white",
-    padding: 10,
-    borderRadius: 6,
-    borderWidth: 1,
-    marginBottom: 10,
-  },
-  inputHalf: {
-    backgroundColor: "white",
-    padding: 10,
-    borderRadius: 6,
-    borderWidth: 1,
-    flex: 1,
-    marginBottom: 10,
-  },
-  row: {
-    flexDirection: "row",
-    gap: 10,
-    alignItems: "center",
-    marginBottom: 8,
-  },
-  amPm: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-  },
-  checkbox: {
-    width: 18,
-    height: 18,
-    borderWidth: 1,
-    borderColor: "#000",
-    marginHorizontal: 4,
-  },
-  checkedBox: {
-    backgroundColor: "#000",
-  },
-  daysRow: {
-    marginTop: 10,
-  },
-  dayPills: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-    marginTop: 6,
-  },
-  day: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-    backgroundColor: "#ddd",
-  },
-  daySelected: {
-    backgroundColor: "#000",
-  },
-  dayTextSelected: {
-    color: "#fff",
-  },
-  addButton: {
-    alignItems: "center",
-    marginVertical: 10,
-  },
-  addText: {
-    color: "#000",
-    fontSize: 16,
-    fontWeight: "bold",
-  },
-  finalizeButton: {
-    backgroundColor: "#000",
-    padding: 15,
-    borderRadius: 8,
-    alignItems: "center",
-    marginTop: 20,
-  },
-  finalizeText: {
-    color: "#fff",
-    fontSize: 16,
-  },
+  eventBox: { padding: 15, borderRadius: 8, marginBottom: 20 },
+  input: { padding: 10, borderRadius: 6, borderWidth: 1, marginBottom: 10 },
+  inputHalf: { padding: 10, borderRadius: 6, borderWidth: 1, flex: 1, marginBottom: 10 },
+  row: { flexDirection: "row", gap: 10, alignItems: "center", marginBottom: 8 },
+  amPm: { flexDirection: "row", alignItems: "center", gap: 6 },
+  checkbox: { width: 18, height: 18, borderWidth: 1, borderColor: "#000", marginHorizontal: 4 },
+  checkedBox: { backgroundColor: "#000" },
+  daysRow: { marginTop: 10 },
+  dayPills: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 6 },
+  day: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 },
+  addButton: { alignItems: "center", marginVertical: 10 },
+  addText: { fontSize: 16, fontWeight: "bold" },
+  finalizeButton: { padding: 15, borderRadius: 8, alignItems: "center", marginTop: 20 },
+  finalizeText: { fontSize: 16 },
 });

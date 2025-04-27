@@ -27,16 +27,23 @@ const storage = {
   }
 };
 
+type ThemeColors = {
+  backgroundColor: string;
+  cardColor: string;
+  textColor: string;
+  buttonColor: string;
+  buttonTextColor: string;
+  navBarColor: string;
+  navBarBorderColor: string;
+  iconColor: string;
+  homeButtonBackground: string;
+  placeholderColor: string;
+};
+
 type ThemeContextType = {
   darkMode: boolean;
   toggleDarkMode: () => void;
-  theme: {
-    backgroundColor: string;
-    cardColor: string;
-    textColor: string;
-    buttonColor: string;
-    buttonTextColor: string;
-  };
+  theme: ThemeColors;
 };
 
 const ThemeContext = createContext<ThemeContextType>({
@@ -48,20 +55,29 @@ const ThemeContext = createContext<ThemeContextType>({
     textColor: "#000000",
     buttonColor: "#000000",
     buttonTextColor: "#ffffff",
+    navBarColor: "#ffffff",
+    navBarBorderColor: "#dddddd",
+    iconColor: "#333333",
+    homeButtonBackground: "rgba(0, 102, 204, 0.1)",
+    placeholderColor: "#888888",
   },
 });
 
 export const ThemeProvider = ({ children }: { children: React.ReactNode }) => {
   const [darkMode, setDarkMode] = useState(false);
 
-  // Define your theme object based on darkMode
-  const theme = darkMode
+  const theme: ThemeColors = darkMode
     ? {
         backgroundColor: "#000000",
-        cardColor: "#1e1e1e",
+        cardColor: "#1a1a1a",
         textColor: "#ffffff",
         buttonColor: "#333333",
         buttonTextColor: "#ffffff",
+        navBarColor: "#111111",
+        navBarBorderColor: "#333333",
+        iconColor: "#ffffff",
+        homeButtonBackground: "#333333",
+        placeholderColor: "#aaaaaa", 
       }
     : {
         backgroundColor: "#f4f4f4",
@@ -69,9 +85,13 @@ export const ThemeProvider = ({ children }: { children: React.ReactNode }) => {
         textColor: "#000000",
         buttonColor: "#000000",
         buttonTextColor: "#ffffff",
+        navBarColor: "#ffffff",
+        navBarBorderColor: "#dddddd",
+        iconColor: "#333333",
+        homeButtonBackground: "rgba(0, 102, 204, 0.1)",
+        placeholderColor: "#888888",
       };
 
-  // Load dark mode preference
   useEffect(() => {
     const loadTheme = async () => {
       try {
