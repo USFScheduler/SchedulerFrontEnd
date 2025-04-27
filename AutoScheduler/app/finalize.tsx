@@ -215,17 +215,17 @@ const ShowCombinedItems: React.FC = () => {
 
   if (loading) {
     return (
-      <View style={{ flex: 1, backgroundColor: theme.backgroundColor }}>
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: theme.backgroundColor }}>
         <ActivityIndicator size="large" color="#00bfff" />
-        <Text style={{ color: theme.textColor }}>Loading...</Text>
+        <Text style={{ color: theme.textColor, marginTop: 12 }}>Loading...</Text>
       </View>
     );
   }
 
   if (error) {
     return (
-      <View style={{ flex: 1, backgroundColor: theme.backgroundColor }}>
-        <Text style={{ color: "red" }}>{error}</Text>
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: theme.backgroundColor }}>
+        <Text style={{ color: "red", fontSize: 16, marginBottom: 12 }}>{error}</Text>
       </View>
     );
   }

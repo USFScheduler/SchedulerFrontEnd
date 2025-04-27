@@ -140,7 +140,7 @@ export default function CalendarScreen() {
     const anims = todayItems.map(() => new Animated.Value(0));
     setBounceAnims(anims);
 
-    Animated.stagger(100, anims.map(anim => 
+    Animated.stagger(100, anims.map(anim =>
       Animated.spring(anim, {
         toValue: 1,
         useNativeDriver: true,
@@ -151,25 +151,40 @@ export default function CalendarScreen() {
 
   const formatItemTime = (item: ListItem) => {
     if (item.type === "task" && item.start_time && item.end_time) {
-      const [startH, startM] = item.start_time.split(":").map(Number);
-      const [endH, endM] = item.end_time.split(":").map(Number);
-      const startPeriod = (item.am_start ?? (startH < 12)) ? "AM" : "PM";
-      const endPeriod = (item.am_end ?? (endH < 12)) ? "AM" : "PM";
+      try {
+        const startParts = item.start_time.split(":").map(Number);
+        const endParts = item.end_time.split(":").map(Number);
 
-      const formatHour = (h: number) => (h % 12 === 0 ? 12 : h % 12);
+        if (startParts.length !== 2 || endParts.length !== 2) {
+          return "Invalid time";
+        }
 
-      if (startPeriod === endPeriod) {
-        return `${formatHour(startH)}:${startM.toString().padStart(2, '0')} - ${formatHour(endH)}:${endM.toString().padStart(2, '0')} ${startPeriod}`;
-      } else {
-        return `${formatHour(startH)}:${startM.toString().padStart(2, '0')} ${startPeriod} - ${formatHour(endH)}:${endM.toString().padStart(2, '0')} ${endPeriod}`;
+        const [startH, startM] = startParts;
+        const [endH, endM] = endParts;
+
+        const startPeriod = (item.am_start ?? (startH < 12)) ? "AM" : "PM";
+        const endPeriod = (item.am_end ?? (endH < 12)) ? "AM" : "PM";
+
+        const formatHour = (h: number) => (h % 12 === 0 ? 12 : h % 12);
+
+        if (startPeriod === endPeriod) {
+          return `${formatHour(startH)}:${startM.toString().padStart(2, '0')} - ${formatHour(endH)}:${endM.toString().padStart(2, '0')} ${startPeriod}`;
+        } else {
+          return `${formatHour(startH)}:${startM.toString().padStart(2, '0')} ${startPeriod} - ${formatHour(endH)}:${endM.toString().padStart(2, '0')} ${endPeriod}`;
+        }
+      } catch (error) {
+        console.error("formatItemTime error:", error);
+        return "Invalid time";
       }
     }
-    return null;
+    return "Time unknown";
   };
 
   const renderItem = ({ item, index }: { item: ListItem; index: number }) => {
     const scale = bounceAnims[index] || new Animated.Value(1);
     const dueToday = item.type === "assignment";
+
+    const timeString = formatItemTime(item);
 
     return (
       <Animated.View
@@ -178,7 +193,7 @@ export default function CalendarScreen() {
           marginVertical: 6,
           padding: 12,
           borderRadius: 8,
-          backgroundColor: item.type === "assignment" ? theme.cardColor : theme.cardColor,
+          backgroundColor: theme.cardColor,
           shadowColor: "#000",
           shadowOpacity: 0.1,
           shadowRadius: 3,
@@ -188,20 +203,23 @@ export default function CalendarScreen() {
         <View style={styles.badgeContainer}>
           <Text style={[
             styles.badge,
-            { backgroundColor: item.type === "assignment" ? "#3498db" : "#9b59b6", color: "#fff" }
+            { backgroundColor: dueToday ? "#3498db" : "#9b59b6", color: "#fff" }
           ]}>
-            {item.type === "assignment" ? "Canvas" : "Task"}
+            {dueToday ? "Canvas" : "Task"}
           </Text>
         </View>
+
         <Text style={[styles.itemTitle, { color: theme.textColor }]}>{item.title}</Text>
+
         {dueToday && item.deadline && (
           <Text style={[styles.dueText, { color: theme.textColor }]}>
             Due today by {format(parseISO(item.deadline), "h:mm a")}
           </Text>
         )}
-        {!dueToday && formatItemTime(item) && (
+
+        {!dueToday && timeString && (
           <Text style={[styles.dueText, { color: theme.textColor }]}>
-            {formatItemTime(item)}
+            {timeString}
           </Text>
         )}
       </Animated.View>
@@ -227,7 +245,7 @@ export default function CalendarScreen() {
           markingType="multi-dot"
           onDayPress={(day: { dateString: string }) => setSelectedDate(day.dateString)}
           monthFormat="MMMM yyyy"
-          hideArrows
+          hideArrows={false}
           theme={{
             calendarBackground: theme.backgroundColor,
             textSectionTitleColor: theme.textColor,
@@ -244,7 +262,10 @@ export default function CalendarScreen() {
         />
 
         <View style={styles.itemsContainer}>
-          <Text style={[styles.itemsHeader, { color: theme.textColor }]}>Items for {selectedDate}:</Text>
+          <Text style={[styles.itemsHeader, { color: theme.textColor }]}>
+            Items for {selectedDate}:
+          </Text>
+
           <FlatList
             data={todayItems}
             renderItem={renderItem}
