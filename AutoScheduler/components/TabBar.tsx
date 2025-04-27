@@ -9,7 +9,7 @@ const AppNavBar: React.FC = () => {
   return (
     <View style={styles.navbar}>
       {/* Calendar */}
-      <TouchableOpacity style={styles.navButton} onPress={() => {}}>
+      <TouchableOpacity style={styles.navButton} onPress={() => router.push('/calendar')}>
         <Calendar size={24} />
         <Text style={styles.navButtonText}>Calendar</Text>
       </TouchableOpacity>
@@ -24,19 +24,18 @@ const AppNavBar: React.FC = () => {
       <View style={{ flex: 1 }} />
 
       {/* Home */}
-      <TouchableOpacity style={styles.homeButton} onPress={() => {}}>
+      <TouchableOpacity style={styles.homeButton} onPress={() => router.push('/schedule')}>
         <View style={styles.homeButtonCircle}>
           <Home size={28} color="#333" />
         </View>
         <Text style={styles.homeButtonText}>Home</Text>
       </TouchableOpacity>
 
-
       {/* spacer */}
       <View style={{ flex: 1 }} />
 
       {/* Edit Tasks */}
-      <TouchableOpacity style={styles.navButton} onPress={() => {}}>
+      <TouchableOpacity style={styles.navButton} onPress={() => router.push('/schedule')}>
         <Pencil size={24} />
         <Text style={styles.navButtonText}>Tasks</Text>
       </TouchableOpacity>
@@ -76,17 +75,15 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginHorizontal: 6,
   },
-  
   homeButtonCircle: {
     width: 60,
     height: 60,
-    borderRadius: 30, // perfect circle
-    backgroundColor: 'rgba(0, 102, 204, 0.1)', // light blue transparent background
+    borderRadius: 30,
+    backgroundColor: 'rgba(0, 102, 204, 0.1)',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 4, // little space between circle and text
+    marginBottom: 4,
   },
-  
   homeButtonText: {
     fontSize: 12,
     color: '#333',
