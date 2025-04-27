@@ -210,10 +210,15 @@ export default function HomeScreen() {
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.backgroundColor }]}>
-      <Text style={[styles.greeting, { color: theme.textColor }]}>Welcome, {username}!</Text>
-      <Text style={[styles.subheading, { color: theme.textColor }]}>Here's your day ahead:</Text>
-      <ScrollView ref={scrollViewRef} contentContainerStyle={{ paddingBottom: 100 }}>
+    <View style={{ flex: 1, backgroundColor: theme.backgroundColor }}>
+      {/* Top Section: greeting + subheading */}
+      <View style={{ paddingHorizontal: 16, paddingTop: 16 }}>
+        <Text style={[styles.greeting, { color: theme.textColor }]}>Welcome, {username}!</Text>
+        <Text style={[styles.subheading, { color: theme.textColor }]}>Here's your day ahead:</Text>
+      </View>
+  
+      {/* Middle Section: the scrollable schedule */}
+      <ScrollView ref={scrollViewRef} contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 40, paddingTop: 10 }} style={{ flex: 1 }}>
         <View style={{ position: "relative", minHeight: (dayEndHour - dayStartHour + 1) * HOUR_BLOCK_HEIGHT }}>
           <View style={[styles.currentTimeMarker, { top: calculateCurrentTimePosition() }]} />
           {Array.from({ length: dayEndHour - dayStartHour + 1 }).map((_, index) => {
@@ -227,9 +232,12 @@ export default function HomeScreen() {
           })}
         </View>
       </ScrollView>
+  
+      {/* Bottom Section: TabBar */}
       <TabBar />
     </View>
   );
+  
 }
 
 const styles = StyleSheet.create({
