@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef } from "react";
 import { View, Text, ScrollView, StyleSheet, ActivityIndicator, Dimensions } from "react-native";
 import api from "../api/api";
-import { getUserId, getUsername } from "../utils/tokenStorage";
+import { getUserId, getUserInfo } from "../utils/tokenStorage";
 import { parseISO, isToday, format, compareAsc } from "date-fns";
 import TabBar from "../components/TabBar";
 
@@ -9,7 +9,7 @@ interface Assignment {
   id: number;
   title: string;
   deadline: string | null;
-  type: 'assignment';
+  type: "assignment";
 }
 
 interface Task {
@@ -21,7 +21,7 @@ interface Task {
   days_of_week: string[] | null;
   am_start?: boolean;
   am_end?: boolean;
-  type: 'task';
+  type: "task";
 }
 
 type ListItem = Assignment | Task;
@@ -30,7 +30,7 @@ const HOUR_BLOCK_HEIGHT = 80;
 
 export default function HomeScreen() {
   const [items, setItems] = useState<ListItem[]>([]);
-  const [username, setUsername] = useState("User");
+  const [username, setUsername] = useState<string>("User");
   const [loading, setLoading] = useState(true);
   const [currentHour, setCurrentHour] = useState(new Date());
   const scrollViewRef = useRef<ScrollView>(null);
@@ -47,19 +47,23 @@ export default function HomeScreen() {
   const fetchData = async () => {
     try {
       const userId = await getUserId();
-      const name = await getUsername();
-      if (name) setUsername(name);
+      const userInfo = await getUserInfo();
+      if (userInfo) setUsername(userInfo.name);
       if (!userId) throw new Error("User ID not found");
 
       const [tasksRes, assignmentsRes] = await Promise.all([
         api.get(`/tasks_by_user?user_id=${userId}`),
-        api.get(`/canvas/upcoming_assignments?user_id=${userId}`)
+        api.get(`/canvas/upcoming_assignments?user_id=${userId}`),
       ]);
 
-      const tasksData: Task[] = tasksRes.data.map((t: any) => ({ ...t, type: 'task' as const }));
-      const assignmentsData: Assignment[] = assignmentsRes.data.map((a: any, idx: number) => ({ ...a, id: idx, type: 'assignment' as const }));
+      const tasksData: Task[] = tasksRes.data.map((t: any) => ({ ...t, type: "task" as const }));
+      const assignmentsData: Assignment[] = assignmentsRes.data.map((a: any, idx: number) => ({
+        ...a,
+        id: idx,
+        type: "assignment" as const,
+      }));
 
-      const todayAbbrev = ["Sun", "M", "T", "W", "TH", "F", "S"][new Date().getDay()];
+      const todayAbbrev = ["SU", "M", "T", "W", "TH", "F", "S"][new Date().getDay()];
 
       const todayTasks = tasksData.filter(t => {
         if (t.start_date && isToday(parseISO(t.start_date))) return true;
@@ -78,9 +82,7 @@ export default function HomeScreen() {
       adjustDayRange(combined);
       setItems(combined);
 
-      setTimeout(() => {
-        scrollToCurrentTime();
-      }, 500);
+      setTimeout(() => scrollToCurrentTime(), 500);
 
     } catch (error) {
       console.error("Error fetching data:", error);
@@ -91,20 +93,23 @@ export default function HomeScreen() {
 
   const getListItemDate = (item: ListItem): Date => {
     const today = new Date();
-    if (item.type === "assignment" && item.deadline) return parseISO(item.deadline);
+    if (item.type === "assignment" && item.deadline) {
+      return parseISO(item.deadline);
+    }
     if (item.type === "task" && item.start_time) {
-      let [hour, minute] = item.start_time.split(":" as any).map(Number);
+      let [hour, minute] = item.start_time.split(":").map(Number);
       if (item.am_start === false && hour < 12) hour += 12;
       if (item.am_start === true && hour === 12) hour = 0;
       today.setHours(hour, minute, 0, 0);
+      return today;
     }
     return today;
   };
 
-  const adjustDayRange = (list: ListItem[]) => {
+  const adjustDayRange = (items: ListItem[]) => {
     let earliest = 6;
     let latest = 23;
-    list.forEach(item => {
+    items.forEach(item => {
       const date = getListItemDate(item);
       const hour = date.getHours();
       if (hour < earliest) earliest = hour;
@@ -125,8 +130,54 @@ export default function HomeScreen() {
   const scrollToCurrentTime = () => {
     const position = calculateCurrentTimePosition();
     if (scrollViewRef.current) {
-      scrollViewRef.current.scrollTo({ y: position - 100, animated: true });
+      scrollViewRef.current.scrollTo({
+        y: position - 100,
+        animated: true,
+      });
     }
+  };
+
+  const formatItemTimeRange = (item: ListItem) => {
+    if (item.type === "task" && item.start_time && item.end_time) {
+      const [startHour, startMinute] = item.start_time.split(":").map(Number);
+      const [endHour, endMinute] = item.end_time.split(":").map(Number);
+
+      const startPeriod = item.am_start ? "AM" : "PM";
+      const endPeriod = item.am_end ? "AM" : "PM";
+
+      const formatHour = (h: number) => (h % 12 === 0 ? 12 : h % 12);
+
+      if (startPeriod === endPeriod) {
+        return `${formatHour(startHour)}:${startMinute.toString().padStart(2, '0')} - ${formatHour(endHour)}:${endMinute.toString().padStart(2, '0')} ${startPeriod}`;
+      } else {
+        return `${formatHour(startHour)}:${startMinute.toString().padStart(2, '0')} ${startPeriod} - ${formatHour(endHour)}:${endMinute.toString().padStart(2, '0')} ${endPeriod}`;
+      }
+    }
+    return null;
+  };
+
+  const renderItemsAtHour = (hour: number) => {
+    return items
+      .filter(item => getListItemDate(item).getHours() === hour)
+      .map(item => (
+        <View
+          key={`${item.type}-${item.id}`}
+          style={[
+            styles.taskCard,
+            item.type === "assignment" ? styles.assignmentCard : styles.taskCardColor
+          ]}
+        >
+          <View style={styles.badgeContainer}>
+            <Text style={[styles.badge, item.type === "assignment" ? styles.badgeBlue : styles.badgePurple]}>
+              {item.type === "assignment" ? "Canvas" : "Task"}
+            </Text>
+          </View>
+          <Text style={styles.taskTitle}>{item.title}</Text>
+          {item.type === "task" && (
+            <Text style={styles.taskTime}>{formatItemTimeRange(item)}</Text>
+          )}
+        </View>
+      ));
   };
 
   const renderHourBlock = (hour: number) => {
@@ -138,38 +189,6 @@ export default function HomeScreen() {
         <View style={styles.hourLine} />
       </View>
     );
-  };
-
-  const renderItemsAtHour = (hour: number) => {
-    const formatItemTimeRange = (item: ListItem) => {
-      if (item.type === "task" && item.start_time && item.end_time) {
-        const [startHour, startMinute] = item.start_time.split(":" as any).map(Number);
-        const [endHour, endMinute] = item.end_time.split(":" as any).map(Number);
-        const ampmStart = item.am_start ? "AM" : "PM";
-        const ampmEnd = item.am_end ? "AM" : "PM";
-
-        const formatHour = (h: number) => (h % 12 === 0 ? 12 : h % 12);
-
-        if (ampmStart === ampmEnd) {
-          return `${formatHour(startHour)}:${startMinute.toString().padStart(2, '0')} - ${formatHour(endHour)}:${endMinute.toString().padStart(2, '0')} ${ampmStart}`;
-        } else {
-          return `${formatHour(startHour)}:${startMinute.toString().padStart(2, '0')} ${ampmStart} - ${formatHour(endHour)}:${endMinute.toString().padStart(2, '0')} ${ampmEnd}`;
-        }
-      }
-      return null;
-    };
-
-    return items.filter(item => getListItemDate(item).getHours() === hour).map(item => (
-      <View key={`${item.type}-${item.id}`} style={[styles.taskCard, item.type === "assignment" ? styles.assignmentCard : styles.taskCardColor]}>
-        <View style={styles.badgeContainer}>
-          <Text style={[styles.badge, item.type === "assignment" ? styles.badgeBlue : styles.badgePurple]}>
-            {item.type === "assignment" ? "Canvas" : "Task"}
-          </Text>
-        </View>
-        <Text style={styles.taskTitle}>{item.title}</Text>
-        {item.type === "task" && <Text style={styles.taskTime}>{formatItemTimeRange(item)}</Text>}
-      </View>
-    ));
   };
 
   if (loading) {
@@ -189,6 +208,7 @@ export default function HomeScreen() {
       <ScrollView ref={scrollViewRef} contentContainerStyle={{ paddingBottom: 100 }}>
         <View style={{ position: "relative", minHeight: (dayEndHour - dayStartHour + 1) * HOUR_BLOCK_HEIGHT }}>
           <View style={[styles.currentTimeMarker, { top: calculateCurrentTimePosition() }]} />
+
           {Array.from({ length: dayEndHour - dayStartHour + 1 }).map((_, index) => {
             const hour = dayStartHour + index;
             return (
@@ -214,7 +234,7 @@ const styles = StyleSheet.create({
   hourBlock: { flexDirection: "row", alignItems: "center", paddingVertical: 6 },
   hourLabel: { width: 80, fontSize: 14, color: "#666" },
   hourLine: { flex: 1, height: 1, backgroundColor: "#ddd" },
-  taskCard: { padding: 12, borderRadius: 8, marginVertical: 4, marginLeft: 90, marginRight: 10, shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 2, elevation: 2, backgroundColor: "#f4f8ff" },
+  taskCard: { padding: 12, borderRadius: 8, marginVertical: 4, marginLeft: 90, marginRight: 10, shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 2, elevation: 2 },
   taskCardColor: { backgroundColor: "#f9f7ff" },
   assignmentCard: { backgroundColor: "#e8f4ff" },
   badgeContainer: { position: "absolute", top: 8, right: 8 },
