@@ -75,7 +75,7 @@ const ShowCombinedItems: React.FC = () => {
       setUserId(retrievedUserId);
   
       const [assignmentsData, tasksData] = await Promise.all([
-        fetchUpcomingCanvasAssignments(),
+        fetchUpcomingCanvasAssignments(retrievedUserId),
         fetchTasks(retrievedUserId)
       ]);
   
@@ -150,9 +150,9 @@ const ShowCombinedItems: React.FC = () => {
   };
   
 
-  const fetchUpcomingCanvasAssignments = async (): Promise<Assignment[]> => {
+  const fetchUpcomingCanvasAssignments = async (retrievedUserId: string): Promise<Assignment[]> => {
     try {
-      const response = await api.get<Assignment[]>('/canvas/upcoming_assignments');
+      const response = await api.get<Assignment[]>(`/canvas/upcoming_assignments?user_id=${retrievedUserId}`);
   
       if (response.status !== 200) {
         throw new Error('Failed to fetch assignments');
