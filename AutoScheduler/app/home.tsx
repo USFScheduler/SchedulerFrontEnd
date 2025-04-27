@@ -1,11 +1,9 @@
-// app/home.tsx
-
-import React, { useEffect, useState } from "react";
-import { View, Text, FlatList, StyleSheet, ActivityIndicator } from "react-native";
+import React, { useEffect, useState, useRef } from "react";
+import { View, Text, FlatList, StyleSheet, ActivityIndicator, ScrollView, Dimensions } from "react-native";
 import api from "../api/api";
 import { getUserId, getUsername } from "../utils/tokenStorage";
-import { format, isToday, parseISO } from "date-fns";
-import TabBar from "../components/TabBar"; // or AppNavBar if newer
+import { parseISO, isToday, format } from "date-fns";
+import TabBar from "../components/TabBar";
 
 interface Task {
   id: number;
@@ -16,33 +14,37 @@ interface Task {
   days_of_week: string[] | null;
 }
 
+const screenHeight = Dimensions.get("window").height;
+const HOUR_BLOCK_HEIGHT = 80; // pixels per hour block (adjustable)
+
 export default function HomeScreen() {
   const [tasks, setTasks] = useState<Task[]>([]);
-  const [todayTasks, setTodayTasks] = useState<Task[]>([]);
   const [username, setUsername] = useState<string>("User");
   const [loading, setLoading] = useState(true);
+  const [currentHour, setCurrentHour] = useState(new Date());
+  const scrollViewRef = useRef<ScrollView>(null);
+
+  const [dayStartHour, setDayStartHour] = useState(6);
+  const [dayEndHour, setDayEndHour] = useState(23);
 
   useEffect(() => {
     fetchTasks();
+    const interval = setInterval(() => setCurrentHour(new Date()), 60000); // Update every 1 min
+    return () => clearInterval(interval);
   }, []);
 
   const fetchTasks = async () => {
     try {
       const userId = await getUserId();
       const name = await getUsername();
-
-      if (name) {
-        setUsername(name);
-      }
-
+      if (name) setUsername(name);
       if (!userId) throw new Error("User ID not found");
 
       const response = await api.get(`/tasks_by_user?user_id=${userId}`);
-
       if (response.status === 200) {
-        const allTasks: Task[] = response.data;
-        setTasks(allTasks);
-        filterTodayTasks(allTasks);
+        const todayTasks = filterTodayTasks(response.data);
+        adjustDayRange(todayTasks);
+        setTasks(todayTasks);
       } else {
         console.error("Failed to fetch tasks");
       }
@@ -56,38 +58,69 @@ export default function HomeScreen() {
   const filterTodayTasks = (allTasks: Task[]) => {
     const today = new Date();
     const todayDayAbbrev = ["Sun", "M", "T", "W", "TH", "F", "S"][today.getDay()];
-
-    const filtered = allTasks.filter(task => {
+    return allTasks.filter(task => {
       if (task.start_date) {
         const startDate = parseISO(task.start_date);
-        if (isToday(startDate)) {
-          return true;
-        }
+        if (isToday(startDate)) return true;
       }
       if (task.days_of_week && task.days_of_week.includes(todayDayAbbrev)) {
         return true;
       }
       return false;
     });
-
-    const sorted = filtered.sort((a, b) => {
-      if (!a.start_time || !b.start_time) return 0;
-      return a.start_time.localeCompare(b.start_time);
-    });
-
-    setTodayTasks(sorted);
   };
 
-  const renderTask = ({ item }: { item: Task }) => (
-    <View style={styles.taskCard}>
-      <Text style={styles.taskTitle}>{item.title}</Text>
-      {item.start_time && item.end_time && (
-        <Text style={styles.taskTime}>
-          {item.start_time} - {item.end_time}
-        </Text>
-      )}
-    </View>
-  );
+  const adjustDayRange = (tasks: Task[]) => {
+    let earliest = 6;
+    let latest = 23;
+    tasks.forEach(task => {
+      if (task.start_time) {
+        const [hour, minute] = task.start_time.split(":").map(Number);
+        if (hour < earliest) earliest = hour;
+        if (hour > latest) latest = hour;
+      }
+    });
+    setDayStartHour(Math.min(earliest, 6));
+    setDayEndHour(Math.max(latest, 23));
+  };
+
+  const renderHourBlock = (hour: number) => {
+    const ampm = hour >= 12 ? "PM" : "AM";
+    const displayHour = hour % 12 === 0 ? 12 : hour % 12;
+    return (
+      <View key={hour} style={styles.hourBlock}>
+        <Text style={styles.hourLabel}>{`${displayHour}:00 ${ampm}`}</Text>
+        <View style={styles.hourLine} />
+      </View>
+    );
+  };
+
+  const renderTasksAtHour = (hour: number) => {
+    const tasksAtThisHour = tasks.filter(task => {
+      if (!task.start_time) return false;
+      const taskHour = parseInt(task.start_time.split(":")[0], 10);
+      return taskHour === hour;
+    });
+
+    return tasksAtThisHour.map(task => (
+      <View key={task.id} style={styles.taskCard}>
+        <Text style={styles.taskTitle}>{task.title}</Text>
+        {task.start_time && task.end_time && (
+          <Text style={styles.taskTime}>
+            {task.start_time} - {task.end_time}
+          </Text>
+        )}
+      </View>
+    ));
+  };
+
+  const calculateCurrentTimePosition = () => {
+    const now = currentHour;
+    const minutesSinceStart = (now.getHours() - dayStartHour) * 60 + now.getMinutes();
+    const totalMinutesVisible = (dayEndHour - dayStartHour + 1) * 60;
+    const position = (minutesSinceStart / totalMinutesVisible) * ((dayEndHour - dayStartHour + 1) * HOUR_BLOCK_HEIGHT);
+    return Math.max(position, 0);
+  };
 
   if (loading) {
     return (
@@ -103,16 +136,28 @@ export default function HomeScreen() {
       <Text style={styles.greeting}>Welcome, {username}!</Text>
       <Text style={styles.subheading}>Here's your day ahead:</Text>
 
-      {todayTasks.length === 0 ? (
-        <Text style={styles.noTasks}>You have no tasks for today 🎉</Text>
-      ) : (
-        <FlatList
-          data={todayTasks}
-          keyExtractor={(item) => item.id.toString()}
-          renderItem={renderTask}
-          contentContainerStyle={{ paddingBottom: 100 }} // prevent overlapping nav bar
-        />
-      )}
+      <ScrollView ref={scrollViewRef} contentContainerStyle={{ paddingBottom: 100 }}>
+        <View style={{ position: "relative", minHeight: (dayEndHour - dayStartHour + 1) * HOUR_BLOCK_HEIGHT }}>
+          {/* Current Time Marker */}
+          <View
+            style={[
+              styles.currentTimeMarker,
+              { top: calculateCurrentTimePosition() },
+            ]}
+          />
+
+          {/* Hour Blocks */}
+          {Array.from({ length: dayEndHour - dayStartHour + 1 }).map((_, index) => {
+            const hour = dayStartHour + index;
+            return (
+              <View key={hour} style={styles.hourContainer}>
+                {renderHourBlock(hour)}
+                {renderTasksAtHour(hour)}
+              </View>
+            );
+          })}
+        </View>
+      </ScrollView>
 
       <TabBar />
     </View>
@@ -122,22 +167,32 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#fff", padding: 16 },
   greeting: { fontSize: 24, fontWeight: "bold", marginBottom: 4 },
-  subheading: { fontSize: 18, color: "#555", marginBottom: 20 },
+  subheading: { fontSize: 18, color: "#555", marginBottom: 16 },
+  hourContainer: { minHeight: HOUR_BLOCK_HEIGHT, borderBottomWidth: 1, borderBottomColor: "#eee" },
+  hourBlock: { flexDirection: "row", alignItems: "center", paddingVertical: 6 },
+  hourLabel: { width: 80, fontSize: 14, color: "#666" },
+  hourLine: { flex: 1, height: 1, backgroundColor: "#ddd" },
   taskCard: {
-    backgroundColor: "#fafafa",
-    padding: 16,
-    marginBottom: 12,
-    borderRadius: 10,
+    backgroundColor: "#f4f8ff",
+    padding: 12,
+    borderRadius: 8,
+    marginVertical: 4,
+    marginLeft: 90,
+    marginRight: 10,
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
     elevation: 2,
-    borderWidth: 1,
-    borderColor: "#eee",
   },
-  taskTitle: { fontSize: 16, fontWeight: "bold", marginBottom: 4, color: "#333" },
+  taskTitle: { fontSize: 16, fontWeight: "bold", color: "#333" },
   taskTime: { fontSize: 14, color: "#777" },
+  currentTimeMarker: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    height: 2,
+    backgroundColor: "red",
+  },
   centered: { flex: 1, justifyContent: "center", alignItems: "center" },
-  noTasks: { fontSize: 16, color: "#999", textAlign: "center", marginTop: 30 },
 });
