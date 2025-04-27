@@ -1,60 +1,97 @@
-import React from "react";
-import { View, TouchableOpacity, Text, StyleSheet } from "react-native";
-import { useRouter, usePathname } from "expo-router";
+import React from 'react';
+import { View, TouchableOpacity, Text, StyleSheet } from 'react-native';
+import { useRouter } from 'expo-router';
+import { Calendar, List, Home, Settings, Pencil } from 'lucide-react-native';
 
-const tabs = [
-  { name: "Day View", route: "/finalize" },
-  { name: "Week View", route: "/week" },
-  { name: "Add Data", route: "/schedule" },
-  { name: "Empty", route: "/empty" },
-] as const;
-
-const TabBar: React.FC = () => {
+const AppNavBar: React.FC = () => {
   const router = useRouter();
-  const pathname = usePathname();
 
   return (
-    <View style={styles.tabContainer}>
-      {tabs.map((tab) => (
-        <TouchableOpacity
-          key={tab.name}
-          onPress={() => {
-            if (pathname !== tab.route) {
-              router.push(tab.route as any);
-            }
-          }}
-        >
-          <Text
-            style={[
-              styles.tab,
-              pathname === tab.route && styles.activeTab,
-            ]}
-          >
-            {tab.name}
-          </Text>
-        </TouchableOpacity>
-      ))}
+    <View style={styles.navbar}>
+      {/* Calendar */}
+      <TouchableOpacity style={styles.navButton} onPress={() => {}}>
+        <Calendar size={24} />
+        <Text style={styles.navButtonText}>Calendar</Text>
+      </TouchableOpacity>
+
+      {/* List */}
+      <TouchableOpacity style={styles.navButton} onPress={() => router.push('/finalize')}>
+        <List size={24} />
+        <Text style={styles.navButtonText}>List</Text>
+      </TouchableOpacity>
+
+      {/* spacer */}
+      <View style={{ flex: 1 }} />
+
+      {/* Home */}
+      <TouchableOpacity style={styles.homeButton} onPress={() => {}}>
+        <View style={styles.homeButtonCircle}>
+          <Home size={28} color="#333" />
+        </View>
+        <Text style={styles.homeButtonText}>Home</Text>
+      </TouchableOpacity>
+
+
+      {/* spacer */}
+      <View style={{ flex: 1 }} />
+
+      {/* Edit Tasks */}
+      <TouchableOpacity style={styles.navButton} onPress={() => {}}>
+        <Pencil size={24} />
+        <Text style={styles.navButtonText}>Tasks</Text>
+      </TouchableOpacity>
+
+      {/* Settings */}
+      <TouchableOpacity style={styles.navButton} onPress={() => {}}>
+        <Settings size={24} />
+        <Text style={styles.navButtonText}>Settings</Text>
+      </TouchableOpacity>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  tabContainer: {
-    flexDirection: "row",
-    justifyContent: "space-around",
-    paddingVertical: 10,
+  navbar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#ffffff',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
     borderTopWidth: 1,
-    borderColor: "#ccc",
-    backgroundColor: "#fff",
+    borderTopColor: '#ddd',
   },
-  tab: {
-    color: "#888",
-    fontSize: 14,
+  navButton: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginHorizontal: 6,
   },
-  activeTab: {
-    color: "#000",
-    fontWeight: "bold",
+  navButtonText: {
+    fontSize: 12,
+    marginTop: 4,
+    color: '#333',
   },
+  homeButton: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginHorizontal: 6,
+  },
+  
+  homeButtonCircle: {
+    width: 60,
+    height: 60,
+    borderRadius: 30, // perfect circle
+    backgroundColor: 'rgba(0, 102, 204, 0.1)', // light blue transparent background
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 4, // little space between circle and text
+  },
+  
+  homeButtonText: {
+    fontSize: 12,
+    color: '#333',
+    fontWeight: 'bold',
+  }
 });
 
-export default TabBar;
+export default AppNavBar;

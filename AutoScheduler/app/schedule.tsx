@@ -96,6 +96,7 @@ const postEvents = async () => {
 
 
   return (
+  <View style={{ flex: 1 }}>
     <ScrollView contentContainerStyle={styles.container}>
       <Text style={styles.title}>Add Your Current Schedule</Text>
 
@@ -203,8 +204,10 @@ const postEvents = async () => {
         }}      >
         <Text style={styles.finalizeText}>Finalize Schedule</Text>
       </TouchableOpacity>
-      <TabBar />
     </ScrollView>
+    <TabBar /> 
+  </View>
+
   );
 }
 
