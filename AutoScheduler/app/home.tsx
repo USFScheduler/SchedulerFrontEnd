@@ -1,9 +1,10 @@
 import React, { useEffect, useState, useRef } from "react";
-import { View, Text, ScrollView, StyleSheet, ActivityIndicator, Dimensions } from "react-native";
+import { View, Text, ScrollView, StyleSheet, ActivityIndicator } from "react-native";
 import api from "../api/api";
-import { getUserId, getUsername } from "../utils/tokenStorage";
+import { getUserId, getUserInfo } from "../utils/tokenStorage";
 import { parseISO, isToday, format, compareAsc } from "date-fns";
 import TabBar from "../components/TabBar";
+import { useTheme } from "../components/ThemeContext";
 
 interface Assignment {
   id: number;
@@ -34,6 +35,7 @@ export default function HomeScreen() {
   const [loading, setLoading] = useState(true);
   const [currentHour, setCurrentHour] = useState(new Date());
   const scrollViewRef = useRef<ScrollView>(null);
+  const { theme } = useTheme();
 
   const [dayStartHour, setDayStartHour] = useState(6);
   const [dayEndHour, setDayEndHour] = useState(23);
@@ -47,8 +49,8 @@ export default function HomeScreen() {
   const fetchData = async () => {
     try {
       const userId = await getUserId();
-      const name = await getUsername();
-      if (name) setUsername(name);
+      const name = await getUserInfo();
+      if (name?.name) setUsername(name.name);
       if (!userId) throw new Error("User ID not found");
 
       const [tasksRes, assignmentsRes] = await Promise.all([
@@ -93,7 +95,7 @@ export default function HomeScreen() {
     const today = new Date();
     if (item.type === "assignment" && item.deadline) return parseISO(item.deadline);
     if (item.type === "task" && item.start_time) {
-      let [hour, minute] = item.start_time.split(":" as any).map(Number);
+      let [hour, minute] = item.start_time.split(":").map(Number);
       if (item.am_start === false && hour < 12) hour += 12;
       if (item.am_start === true && hour === 12) hour = 0;
       today.setHours(hour, minute, 0, 0);
@@ -134,8 +136,8 @@ export default function HomeScreen() {
     const displayHour = hour % 12 === 0 ? 12 : hour % 12;
     return (
       <View key={hour} style={styles.hourBlock}>
-        <Text style={styles.hourLabel}>{`${displayHour}:00 ${ampm}`}</Text>
-        <View style={styles.hourLine} />
+        <Text style={[styles.hourLabel, { color: theme.textColor }]}>{`${displayHour}:00 ${ampm}`}</Text>
+        <View style={[styles.hourLine, { backgroundColor: theme.textColor === "#ffffff" ? "#555" : "#ddd" }]} />
       </View>
     );
   };
@@ -143,8 +145,8 @@ export default function HomeScreen() {
   const renderItemsAtHour = (hour: number) => {
     const formatItemTimeRange = (item: ListItem) => {
       if (item.type === "task" && item.start_time && item.end_time) {
-        const [startHour, startMinute] = item.start_time.split(":" as any).map(Number);
-        const [endHour, endMinute] = item.end_time.split(":" as any).map(Number);
+        const [startHour, startMinute] = item.start_time.split(":").map(Number);
+        const [endHour, endMinute] = item.end_time.split(":").map(Number);
         const ampmStart = item.am_start ? "AM" : "PM";
         const ampmEnd = item.am_end ? "AM" : "PM";
 
@@ -160,32 +162,31 @@ export default function HomeScreen() {
     };
 
     return items.filter(item => getListItemDate(item).getHours() === hour).map(item => (
-      <View key={`${item.type}-${item.id}`} style={[styles.taskCard, item.type === "assignment" ? styles.assignmentCard : styles.taskCardColor]}>
+      <View key={`${item.type}-${item.id}`} style={[styles.taskCard, { backgroundColor: theme.cardColor }]}>
         <View style={styles.badgeContainer}>
           <Text style={[styles.badge, item.type === "assignment" ? styles.badgeBlue : styles.badgePurple]}>
             {item.type === "assignment" ? "Canvas" : "Task"}
           </Text>
         </View>
-        <Text style={styles.taskTitle}>{item.title}</Text>
-        {item.type === "task" && <Text style={styles.taskTime}>{formatItemTimeRange(item)}</Text>}
+        <Text style={[styles.taskTitle, { color: theme.textColor }]}>{item.title}</Text>
+        {item.type === "task" && <Text style={[styles.taskTime, { color: theme.textColor }]}>{formatItemTimeRange(item)}</Text>}
       </View>
     ));
   };
 
   if (loading) {
     return (
-      <View style={styles.centered}>
-        <ActivityIndicator size="large" color="#0000ff" />
-        <Text>Loading your day...</Text>
+      <View style={[styles.centered, { backgroundColor: theme.backgroundColor }]}>
+        <ActivityIndicator size="large" color={theme.textColor} />
+        <Text style={{ color: theme.textColor }}>Loading your day...</Text>
       </View>
     );
   }
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.greeting}>Welcome, {username}!</Text>
-      <Text style={styles.subheading}>Here's your day ahead:</Text>
-
+    <View style={[styles.container, { backgroundColor: theme.backgroundColor }]}>
+      <Text style={[styles.greeting, { color: theme.textColor }]}>Welcome, {username}!</Text>
+      <Text style={[styles.subheading, { color: theme.textColor }]}>Here's your day ahead:</Text>
       <ScrollView ref={scrollViewRef} contentContainerStyle={{ paddingBottom: 100 }}>
         <View style={{ position: "relative", minHeight: (dayEndHour - dayStartHour + 1) * HOUR_BLOCK_HEIGHT }}>
           <View style={[styles.currentTimeMarker, { top: calculateCurrentTimePosition() }]} />
@@ -200,29 +201,26 @@ export default function HomeScreen() {
           })}
         </View>
       </ScrollView>
-
       <TabBar />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#fff", padding: 16 },
+  container: { flex: 1, padding: 16 },
   greeting: { fontSize: 24, fontWeight: "bold", marginBottom: 4 },
-  subheading: { fontSize: 18, color: "#555", marginBottom: 16 },
-  hourContainer: { minHeight: HOUR_BLOCK_HEIGHT, borderBottomWidth: 1, borderBottomColor: "#eee" },
+  subheading: { fontSize: 18, marginBottom: 16 },
+  hourContainer: { minHeight: HOUR_BLOCK_HEIGHT, borderBottomWidth: 1 },
   hourBlock: { flexDirection: "row", alignItems: "center", paddingVertical: 6 },
-  hourLabel: { width: 80, fontSize: 14, color: "#666" },
-  hourLine: { flex: 1, height: 1, backgroundColor: "#ddd" },
-  taskCard: { padding: 12, borderRadius: 8, marginVertical: 4, marginLeft: 90, marginRight: 10, shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 2, elevation: 2, backgroundColor: "#f4f8ff" },
-  taskCardColor: { backgroundColor: "#f9f7ff" },
-  assignmentCard: { backgroundColor: "#e8f4ff" },
+  hourLabel: { width: 80, fontSize: 14 },
+  hourLine: { flex: 1, height: 1 },
+  taskCard: { padding: 12, borderRadius: 8, marginVertical: 4, marginLeft: 90, marginRight: 10, shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 2, elevation: 2 },
   badgeContainer: { position: "absolute", top: 8, right: 8 },
   badge: { fontSize: 10, fontWeight: "bold", padding: 4, borderRadius: 4, overflow: "hidden" },
   badgePurple: { backgroundColor: "#9b59b6", color: "#fff" },
   badgeBlue: { backgroundColor: "#3498db", color: "#fff" },
-  taskTitle: { fontSize: 16, fontWeight: "bold", color: "#333", marginTop: 4 },
-  taskTime: { fontSize: 13, color: "#555", marginTop: 4 },
+  taskTitle: { fontSize: 16, fontWeight: "bold", marginTop: 4 },
+  taskTime: { fontSize: 13, marginTop: 4 },
   currentTimeMarker: { position: "absolute", left: 0, right: 0, height: 2, backgroundColor: "red" },
   centered: { flex: 1, justifyContent: "center", alignItems: "center" },
 });

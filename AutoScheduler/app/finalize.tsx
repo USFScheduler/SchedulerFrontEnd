@@ -4,6 +4,7 @@ import api from '../api/api';
 import { format, addDays, parseISO, isValid, isSameDay } from 'date-fns';
 import { getUserId } from "../utils/tokenStorage";
 import TabBar from '../components/TabBar';
+import { useTheme } from "../components/ThemeContext";
 
 interface Assignment {
   id: number;
@@ -46,6 +47,7 @@ const ShowCombinedItems: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [userId, setUserId] = useState('');
+  const { theme } = useTheme();
 
   useEffect(() => {
     fetchData();
@@ -228,7 +230,7 @@ const ShowCombinedItems: React.FC = () => {
           <Text style={styles.badgeText}>{item.type === 'assignment' ? 'Canvas' : 'Task'}</Text>
         </View>
 
-        <Text style={styles.itemTitle}>{item.title}</Text>
+        <Text style={[styles.itemTitle, { color: theme.textColor }]}>{item.title}</Text>
 
         <Text style={item.type === 'assignment' ? styles.assignmentDueDate : styles.taskDueDate}>
           {item.type === 'assignment'
@@ -264,7 +266,7 @@ const ShowCombinedItems: React.FC = () => {
     return (
       <View style={styles.centered}>
         <ActivityIndicator size="large" color="#0066cc" />
-        <Text>Loading...</Text>
+        <Text style={{ color: theme.textColor }}>Loading...</Text>
       </View>
     );
   }
@@ -281,18 +283,19 @@ const ShowCombinedItems: React.FC = () => {
   }
 
   return (
-    <View style={{ flex: 1 }}>
-      <View style={styles.container}>
-        <Text style={styles.header}>Upcoming Tasks & Assignments</Text>
+    <View style={{ flex: 1, backgroundColor: theme.backgroundColor }}>
+      <View style={[styles.container, { backgroundColor: theme.backgroundColor }]}>
+        <Text style={[styles.header, { color: theme.textColor }]}>Upcoming Tasks & Assignments</Text>
         {combinedItems.length === 0 ? (
-          <Text style={styles.noItems}>No upcoming items</Text>
+          <Text style={[styles.noItems, { color: theme.textColor }]}>No upcoming items</Text>
         ) : (
           <FlatList
             data={combinedItems}
             renderItem={renderListItem}
             keyExtractor={(item) => `${item.type}-${item.id}`}
             showsVerticalScrollIndicator={false}
-            contentContainerStyle={{ paddingBottom: 80 }}
+            contentContainerStyle={{ paddingBottom: 80, backgroundColor: theme.backgroundColor }}
+
           />
         )}
       </View>
