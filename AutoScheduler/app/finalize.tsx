@@ -108,7 +108,7 @@ const ShowCombinedItems: React.FC = () => {
 
   const fetchTasks = async (userId: string) => {
     try {
-      const response = await api.get<Task[]>(`/tasks_by_user?user_id=${userId}`);
+      const response = await api.get<Task[]>(`tasks/user/${userId}`);
       if (response.status !== 200) throw new Error('Failed to fetch tasks');
 
       const typedTasks = response.data.map(task => ({

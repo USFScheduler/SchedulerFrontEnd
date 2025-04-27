@@ -54,7 +54,7 @@ export default function HomeScreen() {
       if (!userId) throw new Error("User ID not found");
 
       const [tasksRes, assignmentsRes] = await Promise.all([
-        api.get(`/tasks_by_user?user_id=${userId}`),
+        api.get(`tasks/user/${userId}`),
         api.get(`/canvas/upcoming_assignments?user_id=${userId}`),
       ]);
 
