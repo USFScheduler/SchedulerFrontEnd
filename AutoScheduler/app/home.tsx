@@ -5,6 +5,8 @@ import { getUserId, getUserInfo } from "../utils/tokenStorage";
 import { parseISO, isToday, format, compareAsc } from "date-fns";
 import TabBar from "../components/TabBar";
 import { useTheme } from "../components/ThemeContext";
+import { generateMasterSchedule, loadMasterSchedule } from "../utils/masterSchedule";
+
 
 interface Assignment {
   id: number;
@@ -42,6 +44,8 @@ export default function HomeScreen() {
 
   useEffect(() => {
     fetchData();
+    // NEW — also run this:
+    testGenerateMasterSchedule();
     const interval = setInterval(() => setCurrentHour(new Date()), 60000);
     return () => clearInterval(interval);
   }, []);
@@ -138,6 +142,44 @@ export default function HomeScreen() {
       });
     }
   };
+
+  const testGenerateMasterSchedule = async () => {
+    try {
+      const userId = await getUserId();
+      if (!userId) throw new Error("No user ID found!");
+  
+      const [tasksRes, assignmentsRes] = await Promise.all([
+        api.get(`tasks/user/${userId}`),
+        api.get(`/canvas/upcoming_assignments?user_id=${userId}`),
+      ]);
+  
+      const solidTasks = tasksRes.data.map((t: any) => ({
+        id: t.id,
+        title: t.title,
+        start_time: t.start_time,
+        end_time: t.end_time,
+        start_date: t.start_date,
+        days_of_week: t.days_of_week,
+        am_start: t.am_start,
+        am_end: t.am_end,
+        type: "task" as const,
+      }));
+  
+      const assignments = assignmentsRes.data.map((a: any) => ({
+        id: a.id,
+        title: a.title,
+        due_date: a.deadline,
+      }));
+  
+      await generateMasterSchedule(solidTasks, assignments);
+  
+      const master = await loadMasterSchedule();
+      console.log("✅ MasterSchedule loaded successfully:", master);
+    } catch (error) {
+      console.error("❌ Error generating MasterSchedule:", error);
+    }
+  };
+  
 
   const formatItemTimeRange = (item: ListItem) => {
     if (item.type === "task" && item.start_time && item.end_time) {
