@@ -1,6 +1,5 @@
-// Finalized Updated CalendarScreen.tsx with Bounce Animation and Fixed TabBar
 import React, { useState, useEffect } from "react";
-import { View, Text, StyleSheet, ActivityIndicator, FlatList, Animated } from "react-native";
+import { View, Text, StyleSheet, ActivityIndicator, FlatList, Animated, ScrollView } from "react-native";
 import { Calendar } from "react-native-calendars";
 import { format, parseISO } from "date-fns";
 import api from "../api/api";
@@ -20,6 +19,9 @@ interface Task {
   start_date: string | null;
   days_of_week: string[] | null;
   start_time: string | null;
+  end_time: string | null;
+  am_start?: boolean;
+  am_end?: boolean;
   type: "task";
 }
 
@@ -150,6 +152,16 @@ export default function CalendarScreen() {
     )).start();
   }, [selectedDate, tasks.length]);
 
+  const formatItemTime = (item: ListItem) => {
+    if (item.type === "task" && item.start_time) {
+      const [h, m] = item.start_time.split(":").map(Number);
+      const ampm = (item.am_start ?? (h < 12)) ? "AM" : "PM";
+      const displayHour = h % 12 === 0 ? 12 : h % 12;
+      return `${displayHour}:${m.toString().padStart(2, '0')} ${ampm}`;
+    }
+    return null;
+  };
+
   const renderItem = ({ item, index }: { item: ListItem; index: number }) => {
     const scale = bounceAnims[index] || new Animated.Value(1);
     const dueToday = item.type === "assignment";
@@ -177,6 +189,9 @@ export default function CalendarScreen() {
         {dueToday && item.deadline && (
           <Text style={styles.dueText}>Due today by {format(parseISO(item.deadline), "h:mm a")}</Text>
         )}
+        {!dueToday && formatItemTime(item) && (
+          <Text style={styles.dueText}>{formatItemTime(item)}</Text>
+        )}
       </Animated.View>
     );
   };
@@ -191,38 +206,40 @@ export default function CalendarScreen() {
 
   return (
     <View style={{ flex: 1 }}>
-      <Calendar
-        markedDates={{
-          ...markedDates,
-          [selectedDate]: { ...(markedDates[selectedDate] || {}), selected: true, selectedColor: "#00bfff" },
-        }}
-        markingType={"multi-dot"}
-        onDayPress={(day: { dateString: string }) => setSelectedDate(day.dateString)}
-        monthFormat={"MMMM yyyy"}
-        hideArrows
-        theme={{
-          selectedDayBackgroundColor: "#00bfff",
-          todayTextColor: "#00bfff",
-          dotColor: "#00bfff",
-          selectedDotColor: "#ffffff",
-          arrowColor: "#00bfff",
-          monthTextColor: "#333",
-          textMonthFontWeight: "bold",
-          textDayFontSize: 16,
-          textMonthFontSize: 18,
-          textDayHeaderFontSize: 14,
-        }}
-      />
-
-      <View style={styles.itemsContainer}>
-        <Text style={styles.itemsHeader}>Items for {selectedDate}:</Text>
-        <FlatList
-          data={todayItems}
-          renderItem={renderItem}
-          keyExtractor={(item) => `${item.type}-${item.id}`}
-          contentContainerStyle={{ paddingBottom: 80 }}
+      <ScrollView contentContainerStyle={{ flexGrow: 1 }}>
+        <Calendar
+          markedDates={{
+            ...markedDates,
+            [selectedDate]: { ...(markedDates[selectedDate] || {}), selected: true, selectedColor: "#00bfff" },
+          }}
+          markingType={"multi-dot"}
+          onDayPress={(day: { dateString: string }) => setSelectedDate(day.dateString)}
+          monthFormat={"MMMM yyyy"}
+          hideArrows
+          theme={{
+            selectedDayBackgroundColor: "#00bfff",
+            todayTextColor: "#00bfff",
+            dotColor: "#00bfff",
+            selectedDotColor: "#ffffff",
+            arrowColor: "#00bfff",
+            monthTextColor: "#333",
+            textMonthFontWeight: "bold",
+            textDayFontSize: 16,
+            textMonthFontSize: 18,
+            textDayHeaderFontSize: 14,
+          }}
         />
-      </View>
+
+        <View style={styles.itemsContainer}>
+          <Text style={styles.itemsHeader}>Items for {selectedDate}:</Text>
+          <FlatList
+            data={todayItems}
+            renderItem={renderItem}
+            keyExtractor={(item) => `${item.type}-${item.id}`}
+            contentContainerStyle={{ paddingBottom: 80 }}
+          />
+        </View>
+      </ScrollView>
 
       <TabBar />
     </View>
