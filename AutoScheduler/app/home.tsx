@@ -1,9 +1,12 @@
 import React, { useEffect, useState, useRef } from "react";
 import { View, Text, ScrollView, StyleSheet, ActivityIndicator } from "react-native";
+import { View, Text, ScrollView, StyleSheet, ActivityIndicator } from "react-native";
 import api from "../api/api";
+import { getUserId, getUserInfo } from "../utils/tokenStorage";
 import { getUserId, getUserInfo } from "../utils/tokenStorage";
 import { parseISO, isToday, format, compareAsc } from "date-fns";
 import TabBar from "../components/TabBar";
+import { useTheme } from "../components/ThemeContext";
 import { useTheme } from "../components/ThemeContext";
 
 interface Assignment {
@@ -49,6 +52,8 @@ export default function HomeScreen() {
   const fetchData = async () => {
     try {
       const userId = await getUserId();
+      const name = await getUserInfo();
+      if (name?.name) setUsername(name.name);
       const userInfo = await getUserInfo();
       if (userInfo?.name) setUsername(userInfo.name);
       if (!userId) throw new Error("User ID not found");
@@ -95,12 +100,16 @@ export default function HomeScreen() {
 
   const getListItemDate = (item: ListItem): Date => {
     const today = new Date();
-    if (item.type === "assignment" && item.deadline) return parseISO(item.deadline);
+    if (item.type === "assignment" && item.deadline) {
+      return parseISO(item.deadline);
+    }
     if (item.type === "task" && item.start_time) {
+      let [hour, minute] = item.start_time.split(":").map(Number);
       let [hour, minute] = item.start_time.split(":").map(Number);
       if (item.am_start === false && hour < 12) hour += 12;
       if (item.am_start === true && hour === 12) hour = 0;
       today.setHours(hour, minute, 0, 0);
+      return today;
     }
     return today;
   };
@@ -120,15 +129,15 @@ export default function HomeScreen() {
 
   const calculateCurrentTimePosition = () => {
     const now = currentHour;
+    const totalHoursVisible = dayEndHour - dayStartHour + 1;
     const minutesSinceStart = (now.getHours() - dayStartHour) * 60 + now.getMinutes();
-    const totalMinutesVisible = (dayEndHour - dayStartHour + 1) * 60;
-    const position = (minutesSinceStart / totalMinutesVisible) * ((dayEndHour - dayStartHour + 1) * HOUR_BLOCK_HEIGHT);
+    const position = (minutesSinceStart / (totalHoursVisible * 60)) * (totalHoursVisible * HOUR_BLOCK_HEIGHT);
     return Math.max(position, 0);
   };
 
   const scrollToCurrentTime = () => {
     const position = calculateCurrentTimePosition();
-    if (scrollViewRef.current) {
+    if (scrollViewRef.current && !isNaN(position)) {
       scrollViewRef.current.scrollTo({ y: position - 100, animated: true });
     }
   };
@@ -187,11 +196,17 @@ export default function HomeScreen() {
       <View style={[styles.centered, { backgroundColor: theme.backgroundColor }]}>
         <ActivityIndicator size="large" color={theme.textColor} />
         <Text style={{ color: theme.textColor }}>Loading your day...</Text>
+      <View style={[styles.centered, { backgroundColor: theme.backgroundColor }]}>
+        <ActivityIndicator size="large" color={theme.textColor} />
+        <Text style={{ color: theme.textColor }}>Loading your day...</Text>
       </View>
     );
   }
 
   return (
+    <View style={[styles.container, { backgroundColor: theme.backgroundColor }]}>
+      <Text style={[styles.greeting, { color: theme.textColor }]}>Welcome, {username}!</Text>
+      <Text style={[styles.subheading, { color: theme.textColor }]}>Here's your day ahead:</Text>
     <View style={[styles.container, { backgroundColor: theme.backgroundColor }]}>
       <Text style={[styles.greeting, { color: theme.textColor }]}>Welcome, {username}!</Text>
       <Text style={[styles.subheading, { color: theme.textColor }]}>Here's your day ahead:</Text>
@@ -216,10 +231,16 @@ export default function HomeScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, padding: 16 },
+  container: { flex: 1, padding: 16 },
   greeting: { fontSize: 24, fontWeight: "bold", marginBottom: 4 },
   subheading: { fontSize: 18, marginBottom: 16 },
   hourContainer: { minHeight: HOUR_BLOCK_HEIGHT, borderBottomWidth: 1 },
+  subheading: { fontSize: 18, marginBottom: 16 },
+  hourContainer: { minHeight: HOUR_BLOCK_HEIGHT, borderBottomWidth: 1 },
   hourBlock: { flexDirection: "row", alignItems: "center", paddingVertical: 6 },
+  hourLabel: { width: 80, fontSize: 14 },
+  hourLine: { flex: 1, height: 1 },
+  taskCard: { padding: 12, borderRadius: 8, marginVertical: 4, marginLeft: 90, marginRight: 10, shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 2, elevation: 2 },
   hourLabel: { width: 80, fontSize: 14 },
   hourLine: { flex: 1, height: 1 },
   taskCard: { padding: 12, borderRadius: 8, marginVertical: 4, marginLeft: 90, marginRight: 10, shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 2, elevation: 2 },
@@ -229,6 +250,9 @@ const styles = StyleSheet.create({
   badgeBlue: { backgroundColor: "#3498db", color: "#fff" },
   taskTitle: { fontSize: 16, fontWeight: "bold", marginTop: 4 },
   taskTime: { fontSize: 13, marginTop: 4 },
+  taskTitle: { fontSize: 16, fontWeight: "bold", marginTop: 4 },
+  taskTime: { fontSize: 13, marginTop: 4 },
   currentTimeMarker: { position: "absolute", left: 0, right: 0, height: 2, backgroundColor: "red" },
   centered: { flex: 1, justifyContent: "center", alignItems: "center" },
 });
+

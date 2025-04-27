@@ -110,6 +110,7 @@ export default function CalendarScreen() {
       });
     });
 
+
     setMarkedDates(marks);
   };
 
@@ -204,6 +205,7 @@ export default function CalendarScreen() {
       <View style={[styles.centered, { backgroundColor: theme.backgroundColor }]}> 
         <ActivityIndicator size="large" color="#0000ff" />
         <Text style={{ color: theme.textColor }}>Loading calendar...</Text>
+        <Text style={{ color: theme.textColor }}>Loading calendar...</Text>
       </View>
     );
   }
@@ -219,9 +221,18 @@ export default function CalendarScreen() {
           selectedDayBackgroundColor: theme.buttonColor,
           selectedDayTextColor: theme.buttonTextColor,
         }}
+        theme={{
+          calendarBackground: theme.backgroundColor,
+          dayTextColor: theme.textColor,
+          monthTextColor: theme.textColor,
+          textSectionTitleColor: theme.textColor,
+          selectedDayBackgroundColor: theme.buttonColor,
+          selectedDayTextColor: theme.buttonTextColor,
+        }}
         onDayPress={(day: { dateString: string }) => setSelectedDate(day.dateString)}
         markedDates={{
           ...markedDates,
+          ...(selectedDate ? { [selectedDate]: { selected: true, marked: true, selectedColor: theme.buttonColor } } : {})
           ...(selectedDate ? { [selectedDate]: { selected: true, marked: true, selectedColor: theme.buttonColor } } : {})
         }}
       />
