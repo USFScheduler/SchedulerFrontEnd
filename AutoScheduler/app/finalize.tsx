@@ -3,6 +3,7 @@ import { View, Text, FlatList, StyleSheet, ActivityIndicator, TouchableOpacity }
 import api from '../api/api';
 import { format, addDays, startOfWeek, parseISO, isValid, set } from 'date-fns';
 import { getUserId } from "../utils/tokenStorage";
+import TabBar from '../components/TabBar'; // Adjust path if needed
 
 // Define interfaces for our data structures
 interface Assignment {
@@ -286,7 +287,7 @@ const ShowCombinedItems: React.FC = () => {
             Time: Unknown
           </Text>
         )}
-      </TouchableOpacity>
+      </TouchableOpacity>      
     );
   };
   
@@ -315,20 +316,27 @@ const ShowCombinedItems: React.FC = () => {
   }
   
   return (
-    <View style={styles.container}>
-      <Text style={styles.header}>Upcoming Tasks & Assignments</Text>
-      {combinedItems.length === 0 ? (
-        <Text style={styles.noItems}>No upcoming items</Text>
-      ) : (
-        <FlatList
-          data={combinedItems}
-          renderItem={renderListItem}
-          keyExtractor={(item) => `${item.type}-${item.id}`}
-          showsVerticalScrollIndicator={false}
-        />
-      )}
+    <View style={{ flex: 1 }}>
+      <View style={styles.container}>
+        <Text style={styles.header}>Upcoming Tasks & Assignments</Text>
+  
+        {combinedItems.length === 0 ? (
+          <Text style={styles.noItems}>No upcoming items</Text>
+        ) : (
+          <FlatList
+            data={combinedItems}
+            renderItem={renderListItem}
+            keyExtractor={(item) => `${item.type}-${item.id}`}
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={{ paddingBottom: 80 }} // Add padding to avoid hiding last item behind TabBar
+          />
+        )}
+      </View>
+  
+      <TabBar />
     </View>
   );
+  
 };
 
 const styles = StyleSheet.create({
