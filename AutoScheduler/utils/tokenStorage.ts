@@ -23,6 +23,7 @@ const storage = {
   },
 };
 
+// Save and Get Tokens
 export const saveTokens = async (accessToken: string, refreshToken: string) => {
   await storage.setItem("access_token", accessToken);
   await storage.setItem("refresh_token", refreshToken);
@@ -41,10 +42,20 @@ export const clearTokens = async () => {
   await storage.deleteItem("refresh_token");
 };
 
+// ✅ Save and Get User ID
 export const saveUserId = async (userId: number) => {
   await storage.setItem("user_id", userId.toString());
 };
 
 export const getUserId = async (): Promise<string | null> => {
   return await storage.getItem("user_id");
+};
+
+// ✅ NEW: Save and Get Username
+export const saveUsername = async (username: string) => {
+  await storage.setItem("username", username);
+};
+
+export const getUsername = async (): Promise<string | null> => {
+  return await storage.getItem("username");
 };

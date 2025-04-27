@@ -24,7 +24,7 @@ const AppNavBar: React.FC = () => {
       <View style={{ flex: 1 }} />
 
       {/* Home */}
-      <TouchableOpacity style={styles.homeButton} onPress={() => router.push('/schedule')}>
+      <TouchableOpacity style={styles.homeButton} onPress={() => router.push('/home')}>
         <View style={styles.homeButtonCircle}>
           <Home size={28} color="#333" />
         </View>

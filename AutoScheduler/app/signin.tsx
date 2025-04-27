@@ -1,12 +1,8 @@
 import React, { useState } from "react";
 import { View, Text, TextInput, TouchableOpacity, StyleSheet } from "react-native";
 import { useRouter } from "expo-router";
-import { saveTokens } from '../utils/tokenStorage'; // Adjust path if needed
+import { saveTokens, saveUserId, saveUsername } from '../utils/tokenStorage'; // Updated import
 import api from "@/api/api";
-import { saveUserId } from "../utils/tokenStorage";
-
-
-
 
 const SignInScreen = () => {
   const router = useRouter();
@@ -14,50 +10,23 @@ const SignInScreen = () => {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
 
-  const handleSignIn = async () => {
-    try {
-      const response = await fetch("http://127.0.0.1:3000/login", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ name:username, password }),
-      });
-
-      const data = await response.json();
-
-      if (response.ok) {
-        router.push("/schedule"); //Redirect to schedule if login is successful
-      } else {
-        setError(data.errors || "Invalid credentials");
-      }
-    } catch (err) {
-      setError("An error occurred. Please try again.");
-    }
-  };
-  
-
   const handleSignIn2 = async () => {
-  
     try {
       const response = await api.post("/login", {
         name: username,
         password,
       });
-  
+
       const { access_token, refresh_token, user } = response.data;
-  
+
       // Save tokens
       await saveTokens(access_token, refresh_token);
+      await saveUserId(user.id);
+      await saveUsername(user.name);  // Save username too!
 
-      await saveTokens(access_token, refresh_token);
+      router.push("/schedule"); // Redirect to schedule after successful login
 
-      await saveUserId(user.id); // Save the user ID
-  
-      router.push("/schedule");
-  
     } catch (err: any) {
-  
       if (err.response?.status === 401) {
         setError("Invalid credentials. Please try again.");
       } else {
@@ -66,15 +35,11 @@ const SignInScreen = () => {
           err?.response?.data?.errors ||
           err?.response?.data?.message ||
           "An error occurred. Please try again.";
-  
+
         setError(errorMessage);
       }
     }
   };
-  
-  
-  
-  
 
   return (
     <View style={styles.container}>
