@@ -21,7 +21,7 @@ const daysOfWeek = ["M", "T", "W", "TH", "F", "S", "SU"];
 
 export default function ScheduleScreen() {
   const router = useRouter();
-  const { theme } = useTheme();
+  const { theme, darkMode } = useTheme();
 
   const [events, setEvents] = useState<Event[]>([
     { name: "", start: "", end: "", amStart: true, amEnd: true, days: [] },
@@ -151,9 +151,9 @@ export default function ScheduleScreen() {
                   <TouchableOpacity
                     key={day}
                     onPress={() => toggleDay(index, day)}
-                    style={[styles.day, { backgroundColor: event.days.includes(day) ? theme.buttonColor : theme.cardColor }]}
+                    style={[styles.day, { backgroundColor: event.days.includes(day) ? (darkMode ? "#ffffff" : "#000000") : (darkMode ? "#333333" : "#dddddd"), borderColor: theme.navBarBorderColor,}]}
                   >
-                    <Text style={{ color: event.days.includes(day) ? theme.buttonTextColor : theme.textColor }}>{day}</Text>
+                    <Text style={{ color: event.days.includes(day) ? (darkMode ? "#000000" : "#ffffff") : theme.textColor, }}>{day}</Text>
                   </TouchableOpacity>
                 ))}
               </View>
