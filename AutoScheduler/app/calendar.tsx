@@ -1,8 +1,8 @@
-// Updated CalendarScreen.tsx
+// Updated CalendarScreen.tsx (full updated)
 import React, { useState, useEffect } from "react";
 import { View, Text, StyleSheet, ActivityIndicator } from "react-native";
 import { Calendar } from "react-native-calendars";
-import { format, parseISO } from "date-fns";
+import { format, parseISO, isToday } from "date-fns";
 import api from "../api/api";
 import { getUserId } from "../utils/tokenStorage";
 
@@ -16,8 +16,12 @@ interface Assignment {
 interface Task {
   id: number;
   title: string;
+  start_time: string | null;
+  end_time: string | null;
   start_date: string | null;
   days_of_week: string[] | null;
+  am_start?: boolean;
+  am_end?: boolean;
   type: "task";
 }
 
@@ -44,9 +48,9 @@ export default function CalendarScreen() {
       ]);
 
       const fetchedTasks = tasksRes.data.map((t: any) => ({ ...t, type: "task" as const }));
-      const fetchedAssignments = assignmentsRes.data.map((a: any, index: number) => ({
+      const fetchedAssignments = assignmentsRes.data.map((a: any, idx: number) => ({
         ...a,
-        id: index,
+        id: idx,
         type: "assignment" as const,
       }));
 
@@ -63,14 +67,14 @@ export default function CalendarScreen() {
   const generateMarkedDates = (items: ListItem[]) => {
     const marks: { [date: string]: { dots: { color: string }[] } } = {};
     const today = new Date();
-  
+
     items.forEach((item) => {
       let datesToMark: string[] = [];
-  
+
       if (item.type === "assignment" && item.deadline) {
         datesToMark.push(format(parseISO(item.deadline), "yyyy-MM-dd"));
       }
-  
+
       if (item.type === "task") {
         if (item.start_date) {
           datesToMark.push(format(parseISO(item.start_date), "yyyy-MM-dd"));
@@ -80,7 +84,6 @@ export default function CalendarScreen() {
             const futureDate = new Date(today);
             futureDate.setDate(today.getDate() + i);
             const abbrev = getDayAbbreviation(futureDate);
-  
             if (item.days_of_week.includes(abbrev)) {
               const dateKey = format(futureDate, "yyyy-MM-dd");
               datesToMark.push(dateKey);
@@ -88,33 +91,53 @@ export default function CalendarScreen() {
           }
         }
       }
-  
-      // Avoid adding multiple dots for the same task on same day
+
       datesToMark = [...new Set(datesToMark)];
-  
+
       datesToMark.forEach((dateKey) => {
         if (!marks[dateKey]) marks[dateKey] = { dots: [] };
-  
         const color = item.type === "assignment" ? "#3498db" : "#9b59b6";
-  
-        // Only add the dot if this color is not already there
         if (!marks[dateKey].dots.find(dot => dot.color === color)) {
           marks[dateKey].dots.push({ color });
         }
       });
     });
-  
+
     setMarkedDates(marks);
   };
-  
 
   const getDayAbbreviation = (date: Date) => {
     const days = ["SU", "M", "T", "W", "TH", "F", "S"];
     return days[date.getDay()];
   };
 
+  const formatItemTimeRange = (item: ListItem) => {
+    if (item.type === "task" && item.start_time && item.end_time) {
+      const [startHour, startMinute] = item.start_time.split(":" as any).map(Number);
+      const [endHour, endMinute] = item.end_time.split(":" as any).map(Number);
+      const formatHour = (h: number) => (h % 12 === 0 ? 12 : h % 12);
+      const ampmStart = item.am_start ? "AM" : "PM";
+      const ampmEnd = item.am_end ? "AM" : "PM";
+
+      if (ampmStart === ampmEnd) {
+        return `${formatHour(startHour)}:${startMinute.toString().padStart(2, '0')} - ${formatHour(endHour)}:${endMinute.toString().padStart(2, '0')} ${ampmStart}`;
+      } else {
+        return `${formatHour(startHour)}:${startMinute.toString().padStart(2, '0')} ${ampmStart} - ${formatHour(endHour)}:${endMinute.toString().padStart(2, '0')} ${ampmEnd}`;
+      }
+    }
+    if (item.type === "assignment" && item.deadline) {
+      const dueDate = parseISO(item.deadline);
+      const hour = dueDate.getHours();
+      const minute = dueDate.getMinutes();
+      const ampm = hour >= 12 ? "PM" : "AM";
+      const formattedHour = hour % 12 === 0 ? 12 : hour % 12;
+      return `Due today by ${formattedHour}:${minute.toString().padStart(2, '0')} ${ampm}`;
+    }
+    return null;
+  };
+
   const renderItems = () => {
-    const todayItems = tasks.filter((item) => {
+    const dayItems = tasks.filter((item) => {
       if (item.type === "assignment" && item.deadline) {
         return format(parseISO(item.deadline), "yyyy-MM-dd") === selectedDate;
       }
@@ -127,13 +150,17 @@ export default function CalendarScreen() {
         }
       }
       return false;
+    }).sort((a, b) => {
+      const aDate = a.type === "assignment" ? parseISO(a.deadline || '') : parseISO(a.start_date || '');
+      const bDate = b.type === "assignment" ? parseISO(b.deadline || '') : parseISO(b.start_date || '');
+      return aDate.getTime() - bDate.getTime();
     });
 
-    if (todayItems.length === 0) {
+    if (dayItems.length === 0) {
       return <Text style={styles.noItems}>No tasks or assignments for this day.</Text>;
     }
 
-    return todayItems.map((item) => (
+    return dayItems.map((item) => (
       <View
         key={`${item.type}-${item.id}`}
         style={[
@@ -148,6 +175,7 @@ export default function CalendarScreen() {
         </View>
 
         <Text style={styles.itemTitle}>{item.title}</Text>
+        <Text style={styles.itemTime}>{formatItemTimeRange(item)}</Text>
       </View>
     ));
   };
@@ -167,10 +195,9 @@ export default function CalendarScreen() {
           ...markedDates,
           [selectedDate]: { ...(markedDates[selectedDate] || {}), selected: true, selectedColor: "#00bfff" },
         }}
-        markingType={"multi-dot"}
+        markingType="multi-dot"
         onDayPress={(day: { dateString: string }) => setSelectedDate(day.dateString)}
-        monthFormat={"MMMM yyyy"}
-        onMonthChange={(month: { month: number; year: number }) => {}}
+        monthFormat="MMMM yyyy"
         hideArrows
         theme={{
           selectedDayBackgroundColor: "#00bfff",
@@ -200,7 +227,7 @@ const styles = StyleSheet.create({
   itemsContainer: { marginTop: 20 },
   itemsHeader: { fontWeight: "bold", fontSize: 18, marginBottom: 10 },
   noItems: { textAlign: "center", color: "#888", marginTop: 20 },
-  itemBox: { padding: 10, marginVertical: 5, borderRadius: 8, shadowColor: "#000", shadowOpacity: 0.1, shadowRadius: 3, elevation: 2 },
+  itemBox: { padding: 12, marginVertical: 6, borderRadius: 8, shadowColor: "#000", shadowOpacity: 0.1, shadowRadius: 3, elevation: 2 },
   assignmentBox: { backgroundColor: "#e8f4ff" },
   taskBox: { backgroundColor: "#f9f7ff" },
   badgeContainer: { position: "absolute", top: 8, right: 8 },
@@ -208,4 +235,5 @@ const styles = StyleSheet.create({
   badgePurple: { backgroundColor: "#9b59b6", color: "#fff" },
   badgeBlue: { backgroundColor: "#3498db", color: "#fff" },
   itemTitle: { fontSize: 16, fontWeight: "bold", color: "#333", marginTop: 4 },
+  itemTime: { fontSize: 13, color: "#555", marginTop: 4 },
 });
