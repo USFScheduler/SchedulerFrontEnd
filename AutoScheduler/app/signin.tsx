@@ -10,7 +10,7 @@ const SignInScreen = () => {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
 
-  const handleSignIn2 = async () => {
+  const handleSignIn = async () => {
     try {
       const response = await api.post("/login", {
         name: username,
@@ -61,7 +61,7 @@ const SignInScreen = () => {
         value={password}
         onChangeText={setPassword}
       />
-      <TouchableOpacity style={styles.button} onPress={handleSignIn2}>
+      <TouchableOpacity style={styles.button} onPress={handleSignIn}>
         <Text style={styles.buttonText}>Continue</Text>
       </TouchableOpacity>
       <TouchableOpacity onPress={() => router.push("/register")} style={styles.registerButton}>

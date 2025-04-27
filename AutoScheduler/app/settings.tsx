@@ -11,8 +11,8 @@ import {
 } from "react-native";
 import { Stack, useRouter } from "expo-router";
 import { getUserInfo, clearTokens } from "../utils/tokenStorage";
+import AppNavBar from "../components/TabBar";
 import { useTheme } from "../components/ThemeContext";
-import AppNavBar from "../components/TabBar"; 
 
 export default function SettingsScreen() {
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
@@ -58,82 +58,83 @@ export default function SettingsScreen() {
       <Stack.Screen
         options={{
           title: "Settings",
-          headerShown: true,
+          headerShown: false,
           headerBackVisible: true,
         }}
       />
-      
-      <ScrollView contentContainerStyle={[styles.container, { backgroundColor: theme.backgroundColor }]}>
-        {/* User Info Card */}
-        {userInfo && (
-          <View style={[styles.userCard, { backgroundColor: theme.cardColor }]}>
-            <Text style={[styles.userInfoTitle, { color: theme.textColor }]}>Account Info</Text>
-            <Text style={[styles.userInfoText, { color: theme.textColor }]}>Name: {userInfo.name}</Text>
-            <Text style={[styles.userInfoText, { color: theme.textColor }]}>Email: {userInfo.email}</Text>
+
+      {/* Full screen dark/light wrapper */}
+      <View style={{ flex: 1, backgroundColor: theme.backgroundColor }}>
+        <ScrollView contentContainerStyle={styles.container}>
+          
+          {/* User Info Card */}
+          {userInfo && (
+            <View style={[styles.userCard, { backgroundColor: theme.cardColor }]}>
+              <Text style={[styles.userInfoTitle, { color: theme.textColor }]}>Account Info</Text>
+              <Text style={[styles.userInfoText, { color: theme.textColor }]}>Name: {userInfo.name}</Text>
+              <Text style={[styles.userInfoText, { color: theme.textColor }]}>Email: {userInfo.email}</Text>
+            </View>
+          )}
+
+          {/* Enable Notifications */}
+          <View style={[styles.section, { backgroundColor: theme.cardColor }]}>
+            <Text style={[styles.label, { color: theme.textColor }]}>Enable Notifications</Text>
+            <Switch
+              value={notificationsEnabled}
+              onValueChange={setNotificationsEnabled}
+            />
           </View>
-        )}
 
-        {/* Notifications */}
-        <View style={[styles.section, { backgroundColor: theme.cardColor }]}>
-          <Text style={[styles.label, { color: theme.textColor }]}>Enable Notifications</Text>
-          <Switch value={notificationsEnabled} onValueChange={setNotificationsEnabled} />
-        </View>
+          {/* Dark Mode Toggle */}
+          <View style={[styles.section, { backgroundColor: theme.cardColor }]}>
+            <Text style={[styles.label, { color: theme.textColor }]}>Dark Mode</Text>
+            <Switch value={darkMode} onValueChange={toggleDarkMode} />
+          </View>
 
-        {/* Dark Mode */}
-        <View style={[styles.section, { backgroundColor: theme.cardColor }]}>
-          <Text style={[styles.label, { color: theme.textColor }]}>Dark Mode</Text>
-          <Switch value={darkMode} onValueChange={toggleDarkMode} />
-        </View>
+          {/* Change Password */}
+          <View style={[styles.passwordCard, { backgroundColor: theme.cardColor }]}>
+            <TouchableOpacity onPress={() => setShowPasswordFields(!showPasswordFields)}>
+              <Text style={[styles.cardTitle, { color: theme.textColor }]}>
+                Change Password {showPasswordFields ? "" : ""}
+              </Text>
+            </TouchableOpacity>
 
-        {/* Change Password */}
-        <View style={[styles.passwordCard, { backgroundColor: theme.cardColor }]}>
-          <TouchableOpacity onPress={() => setShowPasswordFields(!showPasswordFields)}>
-            <Text style={[styles.cardTitle, { color: theme.textColor }]}>
-              Change Password {showPasswordFields ? "" : ""}
-            </Text>
+            {showPasswordFields && (
+              <>
+                <TextInput
+                  placeholder="Current Password"
+                  secureTextEntry
+                  value={currentPassword}
+                  onChangeText={setCurrentPassword}
+                  style={[styles.input, { backgroundColor: darkMode ? "#2a2a2a" : "white", color: theme.textColor }]}
+                  placeholderTextColor={darkMode ? "#aaa" : "#999"}
+                />
+                <TextInput
+                  placeholder="New Password"
+                  secureTextEntry
+                  value={newPassword}
+                  onChangeText={setNewPassword}
+                  style={[styles.input, { backgroundColor: darkMode ? "#2a2a2a" : "white", color: theme.textColor }]}
+                  placeholderTextColor={darkMode ? "#aaa" : "#999"}
+                />
+
+                <TouchableOpacity style={[styles.button, { backgroundColor: theme.buttonColor }]} onPress={handlePasswordChange}>
+                  <Text style={[styles.buttonText, { color: theme.buttonTextColor }]}>Change Password</Text>
+                </TouchableOpacity>
+              </>
+            )}
+          </View>
+
+          {/* Sign Out */}
+          <TouchableOpacity style={[styles.signOutButton, { backgroundColor: theme.buttonColor }]} onPress={handleSignOut}>
+            <Text style={[styles.buttonText, { color: theme.buttonTextColor }]}>Sign Out</Text>
           </TouchableOpacity>
 
-          {showPasswordFields && (
-            <>
-              <TextInput
-                placeholder="Current Password"
-                secureTextEntry
-                value={currentPassword}
-                onChangeText={setCurrentPassword}
-                style={[
-                  styles.input,
-                  { backgroundColor: darkMode ? "#2a2a2a" : "white", color: theme.textColor },
-                ]}
-                placeholderTextColor={darkMode ? "#aaa" : "#999"}
-              />
-              <TextInput
-                placeholder="New Password"
-                secureTextEntry
-                value={newPassword}
-                onChangeText={setNewPassword}
-                style={[
-                  styles.input,
-                  { backgroundColor: darkMode ? "#2a2a2a" : "white", color: theme.textColor },
-                ]}
-                placeholderTextColor={darkMode ? "#aaa" : "#999"}
-              />
+        </ScrollView>
 
-              <TouchableOpacity style={[styles.button, { backgroundColor: theme.buttonColor }]} onPress={handlePasswordChange}>
-                <Text style={[styles.buttonText, { color: theme.buttonTextColor }]}>Change Password</Text>
-              </TouchableOpacity>
-            </>
-          )}
-        </View>
-
-        {/* Sign Out */}
-        <TouchableOpacity style={[styles.signOutButton, { backgroundColor: theme.buttonColor }]} onPress={handleSignOut}>
-          <Text style={[styles.buttonText, { color: theme.buttonTextColor }]}>Sign Out</Text>
-        </TouchableOpacity>
-
-      </ScrollView>
-
-      {/* ✅ Nav Bar at Bottom */}
-      <AppNavBar />
+        {/* TabBar at the bottom */}
+        <AppNavBar />
+      </View>
     </>
   );
 }
@@ -141,7 +142,7 @@ export default function SettingsScreen() {
 const styles = StyleSheet.create({
   container: {
     padding: 20,
-    paddingBottom: 40,
+    paddingBottom: 100, // ⬅️ Enough padding so sign out isn't hidden behind TabBar
   },
   userCard: {
     borderRadius: 12,

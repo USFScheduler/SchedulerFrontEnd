@@ -5,6 +5,7 @@ import { format, parseISO } from "date-fns";
 import api from "../api/api";
 import { getUserId } from "../utils/tokenStorage";
 import TabBar from "../components/TabBar";
+import { useTheme } from "../components/ThemeContext";
 
 interface Assignment {
   id: number;
@@ -33,6 +34,8 @@ export default function CalendarScreen() {
   const [markedDates, setMarkedDates] = useState<any>({});
   const [selectedDate, setSelectedDate] = useState<string>(format(new Date(), "yyyy-MM-dd"));
   const [bounceAnims, setBounceAnims] = useState<Animated.Value[]>([]);
+
+  const { theme } = useTheme();
 
   useEffect(() => {
     fetchData();
@@ -131,7 +134,7 @@ export default function CalendarScreen() {
   }).sort((a, b) => {
     const getTime = (item: ListItem) => {
       if (item.type === "task" && item.start_time) {
-        const [h, m] = item.start_time.split(":").map(Number);
+        const [h, m] = item.start_time.split(":" as any).map(Number);
         return h * 60 + m;
       }
       return 0;
@@ -154,7 +157,7 @@ export default function CalendarScreen() {
 
   const formatItemTime = (item: ListItem) => {
     if (item.type === "task" && item.start_time) {
-      const [h, m] = item.start_time.split(":").map(Number);
+      const [h, m] = item.start_time.split(":" as any).map(Number);
       const ampm = (item.am_start ?? (h < 12)) ? "AM" : "PM";
       const displayHour = h % 12 === 0 ? 12 : h % 12;
       return `${displayHour}:${m.toString().padStart(2, '0')} ${ampm}`;
@@ -198,48 +201,40 @@ export default function CalendarScreen() {
 
   if (loading) {
     return (
-      <View style={styles.centered}>
-        <ActivityIndicator size="large" color="#3498db" />
+      <View style={[styles.centered, { backgroundColor: theme.backgroundColor }]}> 
+        <ActivityIndicator size="large" color="#0000ff" />
+        <Text style={{ color: theme.textColor }}>Loading calendar...</Text>
       </View>
     );
   }
 
   return (
-    <View style={{ flex: 1 }}>
-      <ScrollView contentContainerStyle={{ flexGrow: 1 }}>
-        <Calendar
-          markedDates={{
-            ...markedDates,
-            [selectedDate]: { ...(markedDates[selectedDate] || {}), selected: true, selectedColor: "#00bfff" },
-          }}
-          markingType={"multi-dot"}
-          onDayPress={(day: { dateString: string }) => setSelectedDate(day.dateString)}
-          monthFormat={"MMMM yyyy"}
-          hideArrows
-          theme={{
-            selectedDayBackgroundColor: "#00bfff",
-            todayTextColor: "#00bfff",
-            dotColor: "#00bfff",
-            selectedDotColor: "#ffffff",
-            arrowColor: "#00bfff",
-            monthTextColor: "#333",
-            textMonthFontWeight: "bold",
-            textDayFontSize: 16,
-            textMonthFontSize: 18,
-            textDayHeaderFontSize: 14,
-          }}
-        />
+    <View style={[styles.container, { backgroundColor: theme.backgroundColor }]}> 
+      <Calendar
+        theme={{
+          calendarBackground: theme.backgroundColor,
+          dayTextColor: theme.textColor,
+          monthTextColor: theme.textColor,
+          textSectionTitleColor: theme.textColor,
+          selectedDayBackgroundColor: theme.buttonColor,
+          selectedDayTextColor: theme.buttonTextColor,
+        }}
+        onDayPress={(day: { dateString: string }) => setSelectedDate(day.dateString)}
+        markedDates={{
+          ...markedDates,
+          ...(selectedDate ? { [selectedDate]: { selected: true, marked: true, selectedColor: theme.buttonColor } } : {})
+        }}
+      />
 
-        <View style={styles.itemsContainer}>
-          <Text style={styles.itemsHeader}>Items for {selectedDate}:</Text>
-          <FlatList
-            data={todayItems}
-            renderItem={renderItem}
-            keyExtractor={(item) => `${item.type}-${item.id}`}
-            contentContainerStyle={{ paddingBottom: 80 }}
-          />
-        </View>
-      </ScrollView>
+      <View style={styles.itemsContainer}>
+        <Text style={[styles.itemsHeader, { color: theme.textColor }]}>Items for {selectedDate}:</Text>
+        <FlatList
+          data={todayItems}
+          renderItem={renderItem}
+          keyExtractor={(item) => `${item.type}-${item.id}`}
+          contentContainerStyle={{ paddingBottom: 80 }}
+        />
+      </View>
 
       <TabBar />
     </View>
@@ -247,6 +242,7 @@ export default function CalendarScreen() {
 }
 
 const styles = StyleSheet.create({
+  container: { flex: 1 },
   centered: { flex: 1, justifyContent: "center", alignItems: "center" },
   itemsContainer: { paddingHorizontal: 16, paddingTop: 12 },
   itemsHeader: { fontWeight: "bold", fontSize: 18, marginBottom: 10 },
@@ -254,6 +250,6 @@ const styles = StyleSheet.create({
   badge: { fontSize: 10, fontWeight: "bold", padding: 4, borderRadius: 4, overflow: "hidden" },
   badgePurple: { backgroundColor: "#9b59b6", color: "#fff" },
   badgeBlue: { backgroundColor: "#3498db", color: "#fff" },
-  itemTitle: { fontSize: 16, fontWeight: "bold", color: "#333", marginBottom: 4 },
+  itemTitle: { fontSize: 16, fontWeight: "bold", marginBottom: 4 },
   dueText: { fontSize: 13, color: "#555" },
 });
