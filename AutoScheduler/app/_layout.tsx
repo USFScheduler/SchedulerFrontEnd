@@ -1,9 +1,13 @@
 import React from "react";
 import { Stack } from "expo-router";
+import { ThemeProvider } from "../components/ThemeContext";
 
 export default function RootLayout() {
   return (
-    <Stack>
+    <Stack screenOptions={{
+      headerShown: false,
+    }}
+    >
       <Stack.Screen name="signin" options={{ title: "Sign In" }} />
       <Stack.Screen name="register" options={{ title: "Register" }} />
       <Stack.Screen name="home" options={{ title: "Home" }} />

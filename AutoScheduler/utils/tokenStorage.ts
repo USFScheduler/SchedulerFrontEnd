@@ -1,6 +1,7 @@
 import * as SecureStore from "expo-secure-store";
 import { Platform } from "react-native";
 
+// Safe storage
 const storage = {
   setItem: async (key: string, value: string) => {
     if (Platform.OS === "web") {
@@ -23,7 +24,7 @@ const storage = {
   },
 };
 
-// Save and Get Tokens
+// Save and get tokens
 export const saveTokens = async (accessToken: string, refreshToken: string) => {
   await storage.setItem("access_token", accessToken);
   await storage.setItem("refresh_token", refreshToken);
@@ -40,9 +41,12 @@ export const getRefreshToken = async () => {
 export const clearTokens = async () => {
   await storage.deleteItem("access_token");
   await storage.deleteItem("refresh_token");
+  await storage.deleteItem("user_id");
+  await storage.deleteItem("user_name");
+  await storage.deleteItem("user_email");
 };
 
-// ✅ Save and Get User ID
+// Save and get user ID
 export const saveUserId = async (userId: number) => {
   await storage.setItem("user_id", userId.toString());
 };
@@ -51,11 +55,18 @@ export const getUserId = async (): Promise<string | null> => {
   return await storage.getItem("user_id");
 };
 
-// ✅ NEW: Save and Get Username
-export const saveUsername = async (username: string) => {
-  await storage.setItem("username", username);
+// Save and get user info (name + email)
+export const saveUserInfo = async (name: string, email: string) => {
+  await storage.setItem("user_name", name);
+  await storage.setItem("user_email", email);
 };
 
-export const getUsername = async (): Promise<string | null> => {
-  return await storage.getItem("username");
+export const getUserInfo = async (): Promise<{ name: string; email: string } | null> => {
+  const name = await storage.getItem("user_name");
+  const email = await storage.getItem("user_email");
+
+  if (name && email) {
+    return { name, email };
+  }
+  return null;
 };
