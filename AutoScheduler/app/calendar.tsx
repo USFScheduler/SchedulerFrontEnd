@@ -3,7 +3,6 @@ import React, { useState, useEffect } from "react";
 import { View, Text, StyleSheet, ActivityIndicator } from "react-native";
 import { Calendar } from "react-native-calendars";
 import { format, parseISO } from "date-fns";
-import DropDownPicker from "react-native-dropdown-picker";
 import api from "../api/api";
 import { getUserId } from "../utils/tokenStorage";
 
@@ -29,8 +28,6 @@ export default function CalendarScreen() {
   const [tasks, setTasks] = useState<ListItem[]>([]);
   const [markedDates, setMarkedDates] = useState<any>({});
   const [selectedDate, setSelectedDate] = useState<string>(format(new Date(), "yyyy-MM-dd"));
-  const [month, setMonth] = useState<number>(new Date().getMonth() + 1);
-  const [year, setYear] = useState<number>(new Date().getFullYear());
 
   useEffect(() => {
     fetchData();
@@ -64,28 +61,56 @@ export default function CalendarScreen() {
   };
 
   const generateMarkedDates = (items: ListItem[]) => {
-    const marks: { [date: string]: any } = {};
+    const marks: { [date: string]: { dots: { color: string }[] } } = {};
+    const today = new Date();
+  
     items.forEach((item) => {
-      let dateKey = "";
+      let datesToMark: string[] = [];
+  
       if (item.type === "assignment" && item.deadline) {
-        dateKey = format(parseISO(item.deadline), "yyyy-MM-dd");
+        datesToMark.push(format(parseISO(item.deadline), "yyyy-MM-dd"));
       }
-      if (item.type === "task" && item.start_date) {
-        dateKey = format(parseISO(item.start_date), "yyyy-MM-dd");
+  
+      if (item.type === "task") {
+        if (item.start_date) {
+          datesToMark.push(format(parseISO(item.start_date), "yyyy-MM-dd"));
+        }
+        if (item.days_of_week && item.days_of_week.length > 0) {
+          for (let i = 0; i < 30; i++) {
+            const futureDate = new Date(today);
+            futureDate.setDate(today.getDate() + i);
+            const abbrev = getDayAbbreviation(futureDate);
+  
+            if (item.days_of_week.includes(abbrev)) {
+              const dateKey = format(futureDate, "yyyy-MM-dd");
+              datesToMark.push(dateKey);
+            }
+          }
+        }
       }
-      if (dateKey) {
-        marks[dateKey] = {
-          marked: true,
-          dots: [{ color: item.type === "assignment" ? "#3498db" : "#9b59b6" }],
-        };
-      }
+  
+      // Avoid adding multiple dots for the same task on same day
+      datesToMark = [...new Set(datesToMark)];
+  
+      datesToMark.forEach((dateKey) => {
+        if (!marks[dateKey]) marks[dateKey] = { dots: [] };
+  
+        const color = item.type === "assignment" ? "#3498db" : "#9b59b6";
+  
+        // Only add the dot if this color is not already there
+        if (!marks[dateKey].dots.find(dot => dot.color === color)) {
+          marks[dateKey].dots.push({ color });
+        }
+      });
     });
+  
     setMarkedDates(marks);
   };
+  
 
-  const onMonthChange = (monthNumber: number, yearNumber: number) => {
-    setMonth(monthNumber);
-    setYear(yearNumber);
+  const getDayAbbreviation = (date: Date) => {
+    const days = ["SU", "M", "T", "W", "TH", "F", "S"];
+    return days[date.getDay()];
   };
 
   const renderItems = () => {
@@ -93,8 +118,13 @@ export default function CalendarScreen() {
       if (item.type === "assignment" && item.deadline) {
         return format(parseISO(item.deadline), "yyyy-MM-dd") === selectedDate;
       }
-      if (item.type === "task" && item.start_date) {
-        return format(parseISO(item.start_date), "yyyy-MM-dd") === selectedDate;
+      if (item.type === "task") {
+        if (item.start_date && format(parseISO(item.start_date), "yyyy-MM-dd") === selectedDate) {
+          return true;
+        }
+        if (item.days_of_week && item.days_of_week.includes(getDayAbbreviation(new Date(selectedDate)))) {
+          return true;
+        }
       }
       return false;
     });
@@ -104,8 +134,20 @@ export default function CalendarScreen() {
     }
 
     return todayItems.map((item) => (
-      <View key={`${item.type}-${item.id}`} style={styles.itemBox}>
-        <Text style={styles.itemText}>{item.title}</Text>
+      <View
+        key={`${item.type}-${item.id}`}
+        style={[
+          styles.itemBox,
+          item.type === "assignment" ? styles.assignmentBox : styles.taskBox,
+        ]}
+      >
+        <View style={styles.badgeContainer}>
+          <Text style={[styles.badge, item.type === "assignment" ? styles.badgeBlue : styles.badgePurple]}>
+            {item.type === "assignment" ? "Canvas" : "Task"}
+          </Text>
+        </View>
+
+        <Text style={styles.itemTitle}>{item.title}</Text>
       </View>
     ));
   };
@@ -123,11 +165,12 @@ export default function CalendarScreen() {
       <Calendar
         markedDates={{
           ...markedDates,
-          [selectedDate]: { selected: true, selectedColor: "#00bfff" },
+          [selectedDate]: { ...(markedDates[selectedDate] || {}), selected: true, selectedColor: "#00bfff" },
         }}
+        markingType={"multi-dot"}
         onDayPress={(day: { dateString: string }) => setSelectedDate(day.dateString)}
         monthFormat={"MMMM yyyy"}
-        onMonthChange={(month: { month: number; year: number }) => onMonthChange(month.month, month.year)}
+        onMonthChange={(month: { month: number; year: number }) => {}}
         hideArrows
         theme={{
           selectedDayBackgroundColor: "#00bfff",
@@ -157,6 +200,12 @@ const styles = StyleSheet.create({
   itemsContainer: { marginTop: 20 },
   itemsHeader: { fontWeight: "bold", fontSize: 18, marginBottom: 10 },
   noItems: { textAlign: "center", color: "#888", marginTop: 20 },
-  itemBox: { padding: 10, marginVertical: 5, backgroundColor: "#f1f1f1", borderRadius: 5 },
-  itemText: { fontSize: 16 },
+  itemBox: { padding: 10, marginVertical: 5, borderRadius: 8, shadowColor: "#000", shadowOpacity: 0.1, shadowRadius: 3, elevation: 2 },
+  assignmentBox: { backgroundColor: "#e8f4ff" },
+  taskBox: { backgroundColor: "#f9f7ff" },
+  badgeContainer: { position: "absolute", top: 8, right: 8 },
+  badge: { fontSize: 10, fontWeight: "bold", padding: 4, borderRadius: 4, overflow: "hidden" },
+  badgePurple: { backgroundColor: "#9b59b6", color: "#fff" },
+  badgeBlue: { backgroundColor: "#3498db", color: "#fff" },
+  itemTitle: { fontSize: 16, fontWeight: "bold", color: "#333", marginTop: 4 },
 });
