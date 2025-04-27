@@ -1,153 +1,258 @@
-import React, { useEffect, useState } from "react";
-import { View, Text, StyleSheet, ActivityIndicator, FlatList } from "react-native";
+import React, { useState, useEffect } from "react";
+import { View, Text, StyleSheet, ActivityIndicator, FlatList, Animated, ScrollView } from "react-native";
 import { Calendar } from "react-native-calendars";
+import { format, parseISO } from "date-fns";
 import api from "../api/api";
 import { getUserId } from "../utils/tokenStorage";
 import TabBar from "../components/TabBar";
-import { useTheme } from "../components/ThemeContext"; // <-- Added
+import { useTheme } from "../components/ThemeContext";
+
+interface Assignment {
+  id: number;
+  title: string;
+  deadline: string | null;
+  type: "assignment";
+}
 
 interface Task {
   id: number;
   title: string;
   start_date: string | null;
-  end_date: string | null;
+  days_of_week: string[] | null;
   start_time: string | null;
   end_time: string | null;
-  days_of_week: string[] | null;
-  user_id?: number;
+  am_start?: boolean;
+  am_end?: boolean;
+  type: "task";
 }
 
-export default function CalendarScreen() {
-  const [tasks, setTasks] = useState<Task[]>([]);
-  const [markedDates, setMarkedDates] = useState({});
-  const [selectedDate, setSelectedDate] = useState<string>("");
-  const [loading, setLoading] = useState(true);
+type ListItem = Assignment | Task;
 
-  const { theme } = useTheme(); // <-- Grab theme
+export default function CalendarScreen() {
+  const { theme } = useTheme();
+  const [loading, setLoading] = useState(true);
+  const [tasks, setTasks] = useState<ListItem[]>([]);
+  const [markedDates, setMarkedDates] = useState<any>({});
+  const [selectedDate, setSelectedDate] = useState<string>(format(new Date(), "yyyy-MM-dd"));
+  const [bounceAnims, setBounceAnims] = useState<Animated.Value[]>([]);
 
   useEffect(() => {
-    fetchTasks();
+    fetchData();
   }, []);
 
-  const fetchTasks = async () => {
+  const fetchData = async () => {
     try {
       const userId = await getUserId();
       if (!userId) throw new Error("User not found");
-      const response = await api.get(`/tasks_by_user?user_id=${userId}`);
 
-      if (response.status === 200) {
-        const fetchedTasks = response.data;
-        setTasks(fetchedTasks);
-        generateMarkedDates(fetchedTasks);
-      } else {
-        console.error("Failed to fetch tasks");
-      }
+      const [tasksRes, assignmentsRes] = await Promise.all([
+        api.get(`/tasks_by_user?user_id=${userId}`),
+        api.get(`/canvas/upcoming_assignments?user_id=${userId}`),
+      ]);
+
+      const fetchedTasks = tasksRes.data.map((t: any) => ({ ...t, type: "task" as const }));
+      const fetchedAssignments = assignmentsRes.data.map((a: any, index: number) => ({
+        ...a,
+        id: index,
+        type: "assignment" as const,
+      }));
+
+      const combined = [...fetchedTasks, ...fetchedAssignments];
+      setTasks(combined);
+      generateMarkedDates(combined);
     } catch (error) {
-      console.error("Error fetching tasks:", error);
+      console.error("Error fetching tasks or assignments:", error);
     } finally {
       setLoading(false);
     }
   };
 
-  const generateMarkedDates = (tasks: Task[]) => {
-    const marks: any = {};
+  const generateMarkedDates = (items: ListItem[]) => {
+    const marks: { [date: string]: { dots: { color: string }[] } } = {};
+    const today = new Date();
 
-    tasks.forEach(task => {
-      if (!task.start_date) return;
+    items.forEach((item) => {
+      let datesToMark: string[] = [];
 
-      const start = new Date(task.start_date);
-      const end = task.end_date ? new Date(task.end_date) : start;
+      if (item.type === "assignment" && item.deadline) {
+        datesToMark.push(format(parseISO(item.deadline), "yyyy-MM-dd"));
+      }
 
-      if (task.days_of_week && task.days_of_week.length > 0) {
-        const dayMap: Record<string, number> = {
-          "Sun": 0,
-          "M": 1,
-          "T": 2,
-          "W": 3,
-          "TH": 4,
-          "F": 5,
-          "S": 6,
-        };
-
-        let current = new Date(start);
-
-        while (current <= end) {
-          const dayNum = current.getDay();
-          const match = task.days_of_week.some(day => dayMap[day] === dayNum);
-
-          if (match) {
-            const dateKey = current.toISOString().split("T")[0];
-            if (!marks[dateKey]) {
-              marks[dateKey] = { marked: true, dots: [{ color: "blue" }] };
+      if (item.type === "task") {
+        if (item.start_date) {
+          datesToMark.push(format(parseISO(item.start_date), "yyyy-MM-dd"));
+        }
+        if (item.days_of_week && item.days_of_week.length > 0) {
+          for (let i = 0; i < 30; i++) {
+            const futureDate = new Date(today);
+            futureDate.setDate(today.getDate() + i);
+            const abbrev = getDayAbbreviation(futureDate);
+            if (item.days_of_week.includes(abbrev)) {
+              datesToMark.push(format(futureDate, "yyyy-MM-dd"));
             }
           }
-
-          current.setDate(current.getDate() + 1);
-        }
-      } else {
-        const dateKey = start.toISOString().split("T")[0];
-        if (!marks[dateKey]) {
-          marks[dateKey] = { marked: true, dots: [{ color: "blue" }] };
         }
       }
+
+      datesToMark = [...new Set(datesToMark)];
+      datesToMark.forEach((dateKey) => {
+        if (!marks[dateKey]) marks[dateKey] = { dots: [] };
+        const color = item.type === "assignment" ? "#3498db" : "#9b59b6";
+        if (!marks[dateKey].dots.find(dot => dot.color === color)) {
+          marks[dateKey].dots.push({ color });
+        }
+      });
     });
 
     setMarkedDates(marks);
   };
 
-  const getTasksForDate = (date: string): Task[] => {
-    return tasks.filter(task => task.start_date && task.start_date.startsWith(date));
+  const getDayAbbreviation = (date: Date) => {
+    const days = ["SU", "M", "T", "W", "TH", "F", "S"];
+    return days[date.getDay()];
+  };
+
+  const todayItems = tasks.filter((item) => {
+    if (item.type === "assignment" && item.deadline) {
+      return format(parseISO(item.deadline), "yyyy-MM-dd") === selectedDate;
+    }
+    if (item.type === "task") {
+      if (item.start_date && format(parseISO(item.start_date), "yyyy-MM-dd") === selectedDate) {
+        return true;
+      }
+      if (item.days_of_week && item.days_of_week.includes(getDayAbbreviation(new Date(selectedDate)))) {
+        return true;
+      }
+    }
+    return false;
+  }).sort((a, b) => {
+    const getTime = (item: ListItem) => {
+      if (item.type === "task" && item.start_time) {
+        const [h, m] = item.start_time.split(":").map(Number);
+        return h * 60 + m;
+      }
+      return 0;
+    };
+    return getTime(a) - getTime(b);
+  });
+
+  useEffect(() => {
+    const anims = todayItems.map(() => new Animated.Value(0));
+    setBounceAnims(anims);
+
+    Animated.stagger(100, anims.map(anim => 
+      Animated.spring(anim, {
+        toValue: 1,
+        useNativeDriver: true,
+        bounciness: 12,
+      })
+    )).start();
+  }, [selectedDate, tasks.length]);
+
+  const formatItemTime = (item: ListItem) => {
+    if (item.type === "task" && item.start_time && item.end_time) {
+      const [startH, startM] = item.start_time.split(":").map(Number);
+      const [endH, endM] = item.end_time.split(":").map(Number);
+      const startPeriod = (item.am_start ?? (startH < 12)) ? "AM" : "PM";
+      const endPeriod = (item.am_end ?? (endH < 12)) ? "AM" : "PM";
+
+      const formatHour = (h: number) => (h % 12 === 0 ? 12 : h % 12);
+
+      if (startPeriod === endPeriod) {
+        return `${formatHour(startH)}:${startM.toString().padStart(2, '0')} - ${formatHour(endH)}:${endM.toString().padStart(2, '0')} ${startPeriod}`;
+      } else {
+        return `${formatHour(startH)}:${startM.toString().padStart(2, '0')} ${startPeriod} - ${formatHour(endH)}:${endM.toString().padStart(2, '0')} ${endPeriod}`;
+      }
+    }
+    return null;
+  };
+
+  const renderItem = ({ item, index }: { item: ListItem; index: number }) => {
+    const scale = bounceAnims[index] || new Animated.Value(1);
+    const dueToday = item.type === "assignment";
+
+    return (
+      <Animated.View
+        style={{
+          transform: [{ scale }],
+          marginVertical: 6,
+          padding: 12,
+          borderRadius: 8,
+          backgroundColor: item.type === "assignment" ? theme.cardColor : theme.cardColor,
+          shadowColor: "#000",
+          shadowOpacity: 0.1,
+          shadowRadius: 3,
+          elevation: 2,
+        }}
+      >
+        <View style={styles.badgeContainer}>
+          <Text style={[
+            styles.badge,
+            { backgroundColor: item.type === "assignment" ? "#3498db" : "#9b59b6", color: "#fff" }
+          ]}>
+            {item.type === "assignment" ? "Canvas" : "Task"}
+          </Text>
+        </View>
+        <Text style={[styles.itemTitle, { color: theme.textColor }]}>{item.title}</Text>
+        {dueToday && item.deadline && (
+          <Text style={[styles.dueText, { color: theme.textColor }]}>
+            Due today by {format(parseISO(item.deadline), "h:mm a")}
+          </Text>
+        )}
+        {!dueToday && formatItemTime(item) && (
+          <Text style={[styles.dueText, { color: theme.textColor }]}>
+            {formatItemTime(item)}
+          </Text>
+        )}
+      </Animated.View>
+    );
   };
 
   if (loading) {
     return (
-      <View style={[styles.centered, { backgroundColor: theme.backgroundColor }]}> {/* dark mode bg */}
-        <ActivityIndicator size="large" color="#0000ff" />
-        <Text style={{ color: theme.textColor }}>Loading calendar...</Text>
+      <View style={[styles.centered, { backgroundColor: theme.backgroundColor }]}>
+        <ActivityIndicator size="large" color="#00bfff" />
       </View>
     );
   }
 
-  const tasksForSelectedDate = selectedDate ? getTasksForDate(selectedDate) : [];
-
   return (
-    <View style={[styles.container, { backgroundColor: theme.backgroundColor }]}> {/* dark mode bg */}
-      <Calendar
-        theme={{
-          calendarBackground: theme.backgroundColor,
-          dayTextColor: theme.textColor,
-          monthTextColor: theme.textColor,
-          textSectionTitleColor: theme.textColor,
-          selectedDayBackgroundColor: theme.buttonColor,
-          selectedDayTextColor: theme.buttonTextColor,
-        }}
-        onDayPress={(day: { dateString: string }) => setSelectedDate(day.dateString)}
-        markedDates={{
-          ...markedDates,
-          ...(selectedDate ? { [selectedDate]: { selected: true, marked: true, selectedColor: theme.buttonColor } } : {})
-        }}
-      />
+    <View style={{ flex: 1, backgroundColor: theme.backgroundColor }}>
+      <ScrollView contentContainerStyle={{ flexGrow: 1 }}>
+        <Calendar
+          markedDates={{
+            ...markedDates,
+            [selectedDate]: { ...(markedDates[selectedDate] || {}), selected: true, selectedColor: "#00bfff" },
+          }}
+          markingType="multi-dot"
+          onDayPress={(day: { dateString: string }) => setSelectedDate(day.dateString)}
+          monthFormat="MMMM yyyy"
+          hideArrows
+          theme={{
+            calendarBackground: theme.backgroundColor,
+            textSectionTitleColor: theme.textColor,
+            selectedDayBackgroundColor: theme.buttonColor,
+            selectedDayTextColor: theme.buttonTextColor,
+            todayTextColor: "#00bfff",
+            dayTextColor: theme.textColor,
+            monthTextColor: theme.textColor,
+            arrowColor: theme.iconColor,
+            textDayFontSize: 16,
+            textMonthFontSize: 18,
+            textDayHeaderFontSize: 14,
+          }}
+        />
 
-      {selectedDate ? (
-        <View style={styles.taskList}>
-          <Text style={[styles.tasksHeader, { color: theme.textColor }]}>Tasks for {selectedDate}:</Text>
-          {tasksForSelectedDate.length > 0 ? (
-            <FlatList
-              data={tasksForSelectedDate}
-              keyExtractor={(item) => item.id.toString()}
-              renderItem={({ item }) => (
-                <View style={styles.taskItem}>
-                  <Text style={[styles.taskTitle, { color: theme.textColor }]}>{item.title}</Text>
-                </View>
-              )}
-            />
-          ) : (
-            <Text style={[styles.noTasks, { color: theme.textColor }]}>No tasks for this day.</Text>
-          )}
+        <View style={styles.itemsContainer}>
+          <Text style={[styles.itemsHeader, { color: theme.textColor }]}>Items for {selectedDate}:</Text>
+          <FlatList
+            data={todayItems}
+            renderItem={renderItem}
+            keyExtractor={(item) => `${item.type}-${item.id}`}
+            contentContainerStyle={{ paddingBottom: 80 }}
+          />
         </View>
-      ) : (
-        <Text style={[styles.noDateSelected, { color: theme.textColor }]}>Select a date to view tasks</Text>
-      )}
+      </ScrollView>
 
       <TabBar />
     </View>
@@ -155,38 +260,11 @@ export default function CalendarScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  taskList: {
-    padding: 16,
-    flex: 1,
-  },
-  tasksHeader: {
-    fontSize: 18,
-    fontWeight: "bold",
-    marginBottom: 10,
-  },
-  taskItem: {
-    paddingVertical: 8,
-    borderBottomColor: "#ccc",
-    borderBottomWidth: 1,
-  },
-  taskTitle: {
-    fontSize: 16,
-  },
-  centered: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  noTasks: {
-    fontSize: 16,
-    textAlign: "center",
-    marginTop: 20,
-  },
-  noDateSelected: {
-    textAlign: "center",
-    marginTop: 10,
-  },
+  centered: { flex: 1, justifyContent: "center", alignItems: "center" },
+  itemsContainer: { paddingHorizontal: 16, paddingTop: 12 },
+  itemsHeader: { fontWeight: "bold", fontSize: 18, marginBottom: 10 },
+  badgeContainer: { position: "absolute", top: 8, right: 8 },
+  badge: { fontSize: 10, fontWeight: "bold", padding: 4, borderRadius: 4, overflow: "hidden" },
+  itemTitle: { fontSize: 16, fontWeight: "bold", marginBottom: 4 },
+  dueText: { fontSize: 13, marginTop: 2 },
 });
