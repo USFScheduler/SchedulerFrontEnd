@@ -24,7 +24,7 @@ const SignInScreen = () => {
       await saveUserId(user.id);
       await saveUserInfo(user.name, user.email);
 
-      router.push("/schedule"); // Redirect to schedule after successful login
+      router.push("/home");
 
     } catch (err: any) {
       if (err.response?.status === 401) {

@@ -1,9 +1,16 @@
 import React, { useEffect, useState, useRef } from "react";
-import { View, Text, FlatList, StyleSheet, ActivityIndicator, ScrollView, Dimensions } from "react-native";
+import { View, Text, ScrollView, StyleSheet, ActivityIndicator, Dimensions } from "react-native";
 import api from "../api/api";
 import { getUserId, getUsername } from "../utils/tokenStorage";
-import { parseISO, isToday, format } from "date-fns";
+import { parseISO, isToday, format, compareAsc } from "date-fns";
 import TabBar from "../components/TabBar";
+
+interface Assignment {
+  id: number;
+  title: string;
+  deadline: string | null;
+  type: 'assignment';
+}
 
 interface Task {
   id: number;
@@ -12,14 +19,18 @@ interface Task {
   end_time: string | null;
   start_date: string | null;
   days_of_week: string[] | null;
+  am_start?: boolean;
+  am_end?: boolean;
+  type: 'task';
 }
 
-const screenHeight = Dimensions.get("window").height;
-const HOUR_BLOCK_HEIGHT = 80; // pixels per hour block (adjustable)
+type ListItem = Assignment | Task;
+
+const HOUR_BLOCK_HEIGHT = 80;
 
 export default function HomeScreen() {
-  const [tasks, setTasks] = useState<Task[]>([]);
-  const [username, setUsername] = useState<string>("User");
+  const [items, setItems] = useState<ListItem[]>([]);
+  const [username, setUsername] = useState("User");
   const [loading, setLoading] = useState(true);
   const [currentHour, setCurrentHour] = useState(new Date());
   const scrollViewRef = useRef<ScrollView>(null);
@@ -28,60 +39,94 @@ export default function HomeScreen() {
   const [dayEndHour, setDayEndHour] = useState(23);
 
   useEffect(() => {
-    fetchTasks();
-    const interval = setInterval(() => setCurrentHour(new Date()), 60000); // Update every 1 min
+    fetchData();
+    const interval = setInterval(() => setCurrentHour(new Date()), 60000);
     return () => clearInterval(interval);
   }, []);
 
-  const fetchTasks = async () => {
+  const fetchData = async () => {
     try {
       const userId = await getUserId();
       const name = await getUsername();
       if (name) setUsername(name);
       if (!userId) throw new Error("User ID not found");
 
-      const response = await api.get(`/tasks_by_user?user_id=${userId}`);
-      if (response.status === 200) {
-        const todayTasks = filterTodayTasks(response.data);
-        adjustDayRange(todayTasks);
-        setTasks(todayTasks);
-      } else {
-        console.error("Failed to fetch tasks");
-      }
+      const [tasksRes, assignmentsRes] = await Promise.all([
+        api.get(`/tasks_by_user?user_id=${userId}`),
+        api.get(`/canvas/upcoming_assignments?user_id=${userId}`)
+      ]);
+
+      const tasksData: Task[] = tasksRes.data.map((t: any) => ({ ...t, type: 'task' as const }));
+      const assignmentsData: Assignment[] = assignmentsRes.data.map((a: any, idx: number) => ({ ...a, id: idx, type: 'assignment' as const }));
+
+      const todayAbbrev = ["Sun", "M", "T", "W", "TH", "F", "S"][new Date().getDay()];
+
+      const todayTasks = tasksData.filter(t => {
+        if (t.start_date && isToday(parseISO(t.start_date))) return true;
+        if (t.days_of_week && t.days_of_week.includes(todayAbbrev)) return true;
+        return false;
+      });
+
+      const todayAssignments = assignmentsData.filter(a => a.deadline && isToday(parseISO(a.deadline)));
+
+      const combined = [...todayTasks, ...todayAssignments].sort((a, b) => {
+        const dateA = getListItemDate(a);
+        const dateB = getListItemDate(b);
+        return compareAsc(dateA, dateB);
+      });
+
+      adjustDayRange(combined);
+      setItems(combined);
+
+      setTimeout(() => {
+        scrollToCurrentTime();
+      }, 500);
+
     } catch (error) {
-      console.error("Error fetching tasks:", error);
+      console.error("Error fetching data:", error);
     } finally {
       setLoading(false);
     }
   };
 
-  const filterTodayTasks = (allTasks: Task[]) => {
+  const getListItemDate = (item: ListItem): Date => {
     const today = new Date();
-    const todayDayAbbrev = ["Sun", "M", "T", "W", "TH", "F", "S"][today.getDay()];
-    return allTasks.filter(task => {
-      if (task.start_date) {
-        const startDate = parseISO(task.start_date);
-        if (isToday(startDate)) return true;
-      }
-      if (task.days_of_week && task.days_of_week.includes(todayDayAbbrev)) {
-        return true;
-      }
-      return false;
-    });
+    if (item.type === "assignment" && item.deadline) return parseISO(item.deadline);
+    if (item.type === "task" && item.start_time) {
+      let [hour, minute] = item.start_time.split(":" as any).map(Number);
+      if (item.am_start === false && hour < 12) hour += 12;
+      if (item.am_start === true && hour === 12) hour = 0;
+      today.setHours(hour, minute, 0, 0);
+    }
+    return today;
   };
 
-  const adjustDayRange = (tasks: Task[]) => {
+  const adjustDayRange = (list: ListItem[]) => {
     let earliest = 6;
     let latest = 23;
-    tasks.forEach(task => {
-      if (task.start_time) {
-        const [hour, minute] = task.start_time.split(":").map(Number);
-        if (hour < earliest) earliest = hour;
-        if (hour > latest) latest = hour;
-      }
+    list.forEach(item => {
+      const date = getListItemDate(item);
+      const hour = date.getHours();
+      if (hour < earliest) earliest = hour;
+      if (hour > latest) latest = hour;
     });
     setDayStartHour(Math.min(earliest, 6));
     setDayEndHour(Math.max(latest, 23));
+  };
+
+  const calculateCurrentTimePosition = () => {
+    const now = currentHour;
+    const minutesSinceStart = (now.getHours() - dayStartHour) * 60 + now.getMinutes();
+    const totalMinutesVisible = (dayEndHour - dayStartHour + 1) * 60;
+    const position = (minutesSinceStart / totalMinutesVisible) * ((dayEndHour - dayStartHour + 1) * HOUR_BLOCK_HEIGHT);
+    return Math.max(position, 0);
+  };
+
+  const scrollToCurrentTime = () => {
+    const position = calculateCurrentTimePosition();
+    if (scrollViewRef.current) {
+      scrollViewRef.current.scrollTo({ y: position - 100, animated: true });
+    }
   };
 
   const renderHourBlock = (hour: number) => {
@@ -95,31 +140,36 @@ export default function HomeScreen() {
     );
   };
 
-  const renderTasksAtHour = (hour: number) => {
-    const tasksAtThisHour = tasks.filter(task => {
-      if (!task.start_time) return false;
-      const taskHour = parseInt(task.start_time.split(":")[0], 10);
-      return taskHour === hour;
-    });
+  const renderItemsAtHour = (hour: number) => {
+    const formatItemTimeRange = (item: ListItem) => {
+      if (item.type === "task" && item.start_time && item.end_time) {
+        const [startHour, startMinute] = item.start_time.split(":" as any).map(Number);
+        const [endHour, endMinute] = item.end_time.split(":" as any).map(Number);
+        const ampmStart = item.am_start ? "AM" : "PM";
+        const ampmEnd = item.am_end ? "AM" : "PM";
 
-    return tasksAtThisHour.map(task => (
-      <View key={task.id} style={styles.taskCard}>
-        <Text style={styles.taskTitle}>{task.title}</Text>
-        {task.start_time && task.end_time && (
-          <Text style={styles.taskTime}>
-            {task.start_time} - {task.end_time}
+        const formatHour = (h: number) => (h % 12 === 0 ? 12 : h % 12);
+
+        if (ampmStart === ampmEnd) {
+          return `${formatHour(startHour)}:${startMinute.toString().padStart(2, '0')} - ${formatHour(endHour)}:${endMinute.toString().padStart(2, '0')} ${ampmStart}`;
+        } else {
+          return `${formatHour(startHour)}:${startMinute.toString().padStart(2, '0')} ${ampmStart} - ${formatHour(endHour)}:${endMinute.toString().padStart(2, '0')} ${ampmEnd}`;
+        }
+      }
+      return null;
+    };
+
+    return items.filter(item => getListItemDate(item).getHours() === hour).map(item => (
+      <View key={`${item.type}-${item.id}`} style={[styles.taskCard, item.type === "assignment" ? styles.assignmentCard : styles.taskCardColor]}>
+        <View style={styles.badgeContainer}>
+          <Text style={[styles.badge, item.type === "assignment" ? styles.badgeBlue : styles.badgePurple]}>
+            {item.type === "assignment" ? "Canvas" : "Task"}
           </Text>
-        )}
+        </View>
+        <Text style={styles.taskTitle}>{item.title}</Text>
+        {item.type === "task" && <Text style={styles.taskTime}>{formatItemTimeRange(item)}</Text>}
       </View>
     ));
-  };
-
-  const calculateCurrentTimePosition = () => {
-    const now = currentHour;
-    const minutesSinceStart = (now.getHours() - dayStartHour) * 60 + now.getMinutes();
-    const totalMinutesVisible = (dayEndHour - dayStartHour + 1) * 60;
-    const position = (minutesSinceStart / totalMinutesVisible) * ((dayEndHour - dayStartHour + 1) * HOUR_BLOCK_HEIGHT);
-    return Math.max(position, 0);
   };
 
   if (loading) {
@@ -138,21 +188,13 @@ export default function HomeScreen() {
 
       <ScrollView ref={scrollViewRef} contentContainerStyle={{ paddingBottom: 100 }}>
         <View style={{ position: "relative", minHeight: (dayEndHour - dayStartHour + 1) * HOUR_BLOCK_HEIGHT }}>
-          {/* Current Time Marker */}
-          <View
-            style={[
-              styles.currentTimeMarker,
-              { top: calculateCurrentTimePosition() },
-            ]}
-          />
-
-          {/* Hour Blocks */}
+          <View style={[styles.currentTimeMarker, { top: calculateCurrentTimePosition() }]} />
           {Array.from({ length: dayEndHour - dayStartHour + 1 }).map((_, index) => {
             const hour = dayStartHour + index;
             return (
               <View key={hour} style={styles.hourContainer}>
                 {renderHourBlock(hour)}
-                {renderTasksAtHour(hour)}
+                {renderItemsAtHour(hour)}
               </View>
             );
           })}
@@ -172,27 +214,15 @@ const styles = StyleSheet.create({
   hourBlock: { flexDirection: "row", alignItems: "center", paddingVertical: 6 },
   hourLabel: { width: 80, fontSize: 14, color: "#666" },
   hourLine: { flex: 1, height: 1, backgroundColor: "#ddd" },
-  taskCard: {
-    backgroundColor: "#f4f8ff",
-    padding: 12,
-    borderRadius: 8,
-    marginVertical: 4,
-    marginLeft: 90,
-    marginRight: 10,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  taskTitle: { fontSize: 16, fontWeight: "bold", color: "#333" },
-  taskTime: { fontSize: 14, color: "#777" },
-  currentTimeMarker: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    height: 2,
-    backgroundColor: "red",
-  },
+  taskCard: { padding: 12, borderRadius: 8, marginVertical: 4, marginLeft: 90, marginRight: 10, shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 2, elevation: 2, backgroundColor: "#f4f8ff" },
+  taskCardColor: { backgroundColor: "#f9f7ff" },
+  assignmentCard: { backgroundColor: "#e8f4ff" },
+  badgeContainer: { position: "absolute", top: 8, right: 8 },
+  badge: { fontSize: 10, fontWeight: "bold", padding: 4, borderRadius: 4, overflow: "hidden" },
+  badgePurple: { backgroundColor: "#9b59b6", color: "#fff" },
+  badgeBlue: { backgroundColor: "#3498db", color: "#fff" },
+  taskTitle: { fontSize: 16, fontWeight: "bold", color: "#333", marginTop: 4 },
+  taskTime: { fontSize: 13, color: "#555", marginTop: 4 },
+  currentTimeMarker: { position: "absolute", left: 0, right: 0, height: 2, backgroundColor: "red" },
   centered: { flex: 1, justifyContent: "center", alignItems: "center" },
 });
