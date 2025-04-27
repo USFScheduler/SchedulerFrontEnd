@@ -19,13 +19,15 @@ interface Task {
   end_time: string | null;
   start_date: string | null;
   days_of_week: string[] | null;
+  am_start?: boolean;
+  am_end?: boolean;
   type: 'task';
 }
 
 type ListItem = Assignment | Task;
 
 const screenHeight = Dimensions.get("window").height;
-const HOUR_BLOCK_HEIGHT = 80; // Height per hour block
+const HOUR_BLOCK_HEIGHT = 80;
 
 export default function HomeScreen() {
   const [tasks, setTasks] = useState<ListItem[]>([]);
@@ -61,11 +63,11 @@ export default function HomeScreen() {
       const todayItems = filterTodayItems(tasksData, assignmentsData);
       adjustDayRange(todayItems);
       setTasks(todayItems);
-      
+
       setTimeout(() => {
         scrollToCurrentTime();
       }, 500);
-      
+
     } catch (error) {
       console.error("Error fetching data:", error);
     } finally {
@@ -98,7 +100,6 @@ export default function HomeScreen() {
 
     const combined = [...todayTasks, ...todayAssignments];
 
-    // Sort by earliest time
     return combined.sort((a, b) => {
       const timeA = getListItemTime(a);
       const timeB = getListItemTime(b);
@@ -107,16 +108,25 @@ export default function HomeScreen() {
   };
 
   const getListItemTime = (item: ListItem): Date => {
+    const today = new Date();
+
     if (item.type === "assignment" && item.deadline) {
       return parseISO(item.deadline);
     }
+
     if (item.type === "task" && item.start_time) {
-      const today = new Date();
-      const [hour, minute] = item.start_time.split(":").map(Number);
+      let [hour, minute] = item.start_time.split(":" as any).map(Number);
+      if (item.am_start === false && hour < 12) {
+        hour += 12;
+      }
+      if (item.am_start === true && hour === 12) {
+        hour = 0;
+      }
       today.setHours(hour, minute, 0, 0);
       return today;
     }
-    return new Date(); // fallback now
+
+    return today;
   };
 
   const adjustDayRange = (items: ListItem[]) => {
@@ -162,6 +172,24 @@ export default function HomeScreen() {
   };
 
   const renderItemsAtHour = (hour: number) => {
+    const formatItemTimeRange = (item: ListItem) => {
+      if (item.type === "task" && item.start_time && item.end_time) {
+        const [startHour, startMinute] = item.start_time.split(":" as any).map(Number);
+        const [endHour, endMinute] = item.end_time.split(":" as any).map(Number);
+        const ampmStart = item.am_start ? "AM" : "PM";
+        const ampmEnd = item.am_end ? "AM" : "PM";
+
+        const formatHour = (h: number) => (h % 12 === 0 ? 12 : h % 12);
+
+        if (ampmStart === ampmEnd) {
+          return `${formatHour(startHour)}:${startMinute.toString().padStart(2, '0')} - ${formatHour(endHour)}:${endMinute.toString().padStart(2, '0')} ${ampmStart}`;
+        } else {
+          return `${formatHour(startHour)}:${startMinute.toString().padStart(2, '0')} ${ampmStart} - ${formatHour(endHour)}:${endMinute.toString().padStart(2, '0')} ${ampmEnd}`;
+        }
+      }
+      return null;
+    };
+
     return tasks
       .filter(item => {
         const itemHour = getListItemTime(item).getHours();
@@ -170,20 +198,17 @@ export default function HomeScreen() {
       .map(item => (
         <View
           key={`${item.type}-${item.id}`}
-          style={[
-            styles.taskCard,
-            item.type === "assignment" ? styles.assignmentCard : styles.taskCardColor,
-          ]}
+          style={[styles.taskCard, item.type === "assignment" ? styles.assignmentCard : styles.taskCardColor]}
         >
           <View style={styles.badgeContainer}>
-            <Text style={[
-              styles.badge,
-              item.type === "assignment" ? styles.badgeBlue : styles.badgePurple
-            ]}>
+            <Text style={[styles.badge, item.type === "assignment" ? styles.badgeBlue : styles.badgePurple]}>
               {item.type === "assignment" ? "Canvas" : "Task"}
             </Text>
           </View>
           <Text style={styles.taskTitle}>{item.title}</Text>
+          {item.type === "task" && (
+            <Text style={styles.taskTime}>{formatItemTimeRange(item)}</Text>
+          )}
         </View>
       ));
   };
@@ -204,15 +229,7 @@ export default function HomeScreen() {
 
       <ScrollView ref={scrollViewRef} contentContainerStyle={{ paddingBottom: 100 }}>
         <View style={{ position: "relative", minHeight: (dayEndHour - dayStartHour + 1) * HOUR_BLOCK_HEIGHT }}>
-          {/* Current Time Marker */}
-          <View
-            style={[
-              styles.currentTimeMarker,
-              { top: calculateCurrentTimePosition() },
-            ]}
-          />
-
-          {/* Hour Blocks */}
+          <View style={[styles.currentTimeMarker, { top: calculateCurrentTimePosition() }]} />
           {Array.from({ length: dayEndHour - dayStartHour + 1 }).map((_, index) => {
             const hour = dayStartHour + index;
             return (
@@ -238,32 +255,15 @@ const styles = StyleSheet.create({
   hourBlock: { flexDirection: "row", alignItems: "center", paddingVertical: 6 },
   hourLabel: { width: 80, fontSize: 14, color: "#666" },
   hourLine: { flex: 1, height: 1, backgroundColor: "#ddd" },
-  taskCard: {
-    padding: 12,
-    borderRadius: 8,
-    marginVertical: 4,
-    marginLeft: 90,
-    marginRight: 10,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
-    backgroundColor: "#f4f8ff", // default
-  },
-  taskCardColor: { backgroundColor: "#f9f7ff" }, // for user tasks
-  assignmentCard: { backgroundColor: "#e8f4ff" }, // for canvas assignments
+  taskCard: { padding: 12, borderRadius: 8, marginVertical: 4, marginLeft: 90, marginRight: 10, shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 2, elevation: 2, backgroundColor: "#f4f8ff" },
+  taskCardColor: { backgroundColor: "#f9f7ff" },
+  assignmentCard: { backgroundColor: "#e8f4ff" },
   badgeContainer: { position: "absolute", top: 8, right: 8 },
   badge: { fontSize: 10, fontWeight: "bold", padding: 4, borderRadius: 4, overflow: "hidden" },
   badgePurple: { backgroundColor: "#9b59b6", color: "#fff" },
   badgeBlue: { backgroundColor: "#3498db", color: "#fff" },
   taskTitle: { fontSize: 16, fontWeight: "bold", color: "#333", marginTop: 4 },
-  currentTimeMarker: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    height: 2,
-    backgroundColor: "red",
-  },
+  taskTime: { fontSize: 13, color: "#555", marginTop: 4 },
+  currentTimeMarker: { position: "absolute", left: 0, right: 0, height: 2, backgroundColor: "red" },
   centered: { flex: 1, justifyContent: "center", alignItems: "center" },
 });
