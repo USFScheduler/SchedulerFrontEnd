@@ -215,7 +215,7 @@ const ShowCombinedItems: React.FC = () => {
 
   if (loading) {
     return (
-      <View style={[styles.centered, { backgroundColor: theme.backgroundColor }]}>
+      <View style={{ flex: 1, backgroundColor: theme.backgroundColor }}>
         <ActivityIndicator size="large" color="#00bfff" />
         <Text style={{ color: theme.textColor }}>Loading...</Text>
       </View>
@@ -224,7 +224,7 @@ const ShowCombinedItems: React.FC = () => {
 
   if (error) {
     return (
-      <View style={[styles.centered, { backgroundColor: theme.backgroundColor }]}>
+      <View style={{ flex: 1, backgroundColor: theme.backgroundColor }}>
         <Text style={{ color: "red" }}>{error}</Text>
       </View>
     );
@@ -232,7 +232,7 @@ const ShowCombinedItems: React.FC = () => {
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.backgroundColor }}>
-      <View style={{ padding: 16 }}>
+      <View style={{ flex: 1, padding: 16 }}>
         <Text style={[styles.header, { color: theme.textColor }]}>Upcoming Tasks & Assignments</Text>
         {combinedItems.length === 0 ? (
           <Text style={[styles.itemSubText, { color: theme.textColor }]}>No upcoming items</Text>
@@ -246,6 +246,8 @@ const ShowCombinedItems: React.FC = () => {
           />
         )}
       </View>
+
+      {/* TabBar placed OUTSIDE content to stay fixed */}
       <TabBar />
     </View>
   );
@@ -276,7 +278,6 @@ const styles = StyleSheet.create({
   badgeText: { color: "#fff", fontSize: 12, fontWeight: "bold" },
   itemTitle: { fontSize: 18, fontWeight: "bold", marginBottom: 8 },
   itemSubText: { fontSize: 14, marginBottom: 4 },
-  centered: { flex: 1, justifyContent: "center", alignItems: "center" },
 });
 
 export default ShowCombinedItems;
