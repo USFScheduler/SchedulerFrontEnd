@@ -1,126 +1,118 @@
-import { parseISO, addMinutes, isBefore, isAfter, format } from "date-fns";
+import { parseISO, addMinutes, isBefore, isAfter } from "date-fns";
 
-// Type Definitions
-export interface Event {
+// Data Types
+export interface Task {
   id: number;
   title: string;
-  start: string; // ISO String
-  end: string;   // ISO String
+  start_time: string;  // ISO String
+  end_time: string;    // ISO String
+  user_defined?: boolean; // If true = user input task, if false = generated work session
 }
 
 export interface Assignment {
   id: number;
   title: string;
-  dueDate: string; // ISO String
+  due_date: string;  // ISO String
 }
 
 export interface WorkHours {
-  start: string; // e.g., "09:00"
-  end: string;   // e.g., "22:00"
+  start: string;  // "09:00"
+  end: string;    // "22:00"
 }
 
-// Helper: Convert "09:00" to today's Date object
-function todayAt(time: string): Date {
-  const [hours, minutes] = time.split(":").map(Number);
-  const now = new Date();
-  now.setHours(hours, minutes, 0, 0);
-  return now;
-}
+// Main function: create scheduled work sessions
+export function scheduleAssignments(
+  userTasks: Task[],
+  assignments: Assignment[],
+  workHours: WorkHours
+): Task[] {
+  const generatedWorkSessions: Task[] = [];
 
-// Step 1: Find available gaps
-export function findAvailableGaps(events: Event[], workHours: WorkHours, date: Date) {
-  const startOfWork = new Date(date);
-  startOfWork.setHours(Number(workHours.start.split(":")[0]), Number(workHours.start.split(":")[1]), 0, 0);
-  const endOfWork = new Date(date);
-  endOfWork.setHours(Number(workHours.end.split(":")[0]), Number(workHours.end.split(":")[1]), 0, 0);
+  const sortedAssignments = [...assignments].sort(
+    (a, b) => parseISO(a.due_date).getTime() - parseISO(b.due_date).getTime()
+  );
 
-  // Filter only events for the same date
-  const dayEvents = events
-    .filter(e => {
-      const eventStart = parseISO(e.start);
-      return eventStart.toDateString() === date.toDateString();
-    })
-    .sort((a, b) => parseISO(a.start).getTime() - parseISO(b.start).getTime());
+  // Go through each assignment
+  for (const assignment of sortedAssignments) {
+    let workMinutesLeft = 180; // 3 hours total
+    let currentDay = new Date(); // Start today
 
-  const gaps: { start: Date; end: Date }[] = [];
-  let current = startOfWork;
+    const dueDate = parseISO(assignment.due_date);
 
-  for (const event of dayEvents) {
-    const eventStart = parseISO(event.start);
-    const eventEnd = parseISO(event.end);
+    while (workMinutesLeft > 0 && isBefore(currentDay, dueDate)) {
+      const dayStart = new Date(currentDay);
+      const dayEnd = new Date(currentDay);
 
-    if (isBefore(current, eventStart)) {
-      gaps.push({ start: current, end: eventStart });
-    }
-    current = isAfter(current, eventEnd) ? current : eventEnd;
-  }
+      // Set to user's preferred work times
+      dayStart.setHours(Number(workHours.start.split(":")[0]), Number(workHours.start.split(":")[1]), 0, 0);
+      dayEnd.setHours(Number(workHours.end.split(":")[0]), Number(workHours.end.split(":")[1]), 0, 0);
 
-  if (isBefore(current, endOfWork)) {
-    gaps.push({ start: current, end: endOfWork });
-  }
+      const freeBlocks = findFreeBlocks(userTasks, dayStart, dayEnd);
 
-  return gaps;
-}
+      for (const block of freeBlocks) {
+        const blockMinutes = (block.end.getTime() - block.start.getTime()) / (1000 * 60);
 
-// Step 2: Schedule sessions
-export function scheduleAssignment(assignment: Assignment, events: Event[], workHours: WorkHours) {
-  const sessions: { title: string; start: Date; end: Date }[] = [];
-  const dueDate = parseISO(assignment.dueDate);
+        if (blockMinutes >= 30) {
+          const sessionMinutes = Math.min(60, blockMinutes, workMinutesLeft); // Prefer 60 mins but can be smaller
+          const sessionStart = block.start;
+          const sessionEnd = addMinutes(sessionStart, sessionMinutes);
 
-  // Try starting today
-  const today = new Date();
-  let dateCursor = today;
+          // Create new work session
+          const newSession: Task = {
+            id: Math.floor(Math.random() * 100000),
+            title: `Work on ${assignment.title}`,
+            start_time: sessionStart.toISOString(),
+            end_time: sessionEnd.toISOString(),
+            user_defined: false,
+          };
 
-  // If due today, prioritize today
-  if (dueDate.toDateString() === today.toDateString()) {
-    dateCursor = today;
-  }
+          generatedWorkSessions.push(newSession);
 
-  let minutesRemaining = 180; // 3 hours = 180 minutes
-  const minSession = 30; // minimum block size (minutes)
+          // Add the session into the user's tasks to avoid overlap
+          userTasks.push(newSession);
 
-  while (minutesRemaining > 0 && isBefore(dateCursor, addMinutes(dueDate, 1))) {
-    const gaps = findAvailableGaps(events, workHours, dateCursor);
+          workMinutesLeft -= sessionMinutes;
+        }
 
-    for (const gap of gaps) {
-      const gapMinutes = (gap.end.getTime() - gap.start.getTime()) / (1000 * 60);
-
-      if (gapMinutes >= minSession) {
-        const sessionLength = Math.min(60, gapMinutes, minutesRemaining); // Prefer 1hr but can be smaller
-        const sessionStart = new Date(gap.start);
-        const sessionEnd = addMinutes(sessionStart, sessionLength);
-
-        sessions.push({
-          title: `${assignment.title} - Work Session`,
-          start: sessionStart,
-          end: sessionEnd,
-        });
-
-        // Add this as an event (block future gaps)
-        events.push({
-          id: Math.floor(Math.random() * 100000), // temp ID
-          title: `${assignment.title} - Work Session`,
-          start: sessionStart.toISOString(),
-          end: sessionEnd.toISOString(),
-        });
-
-        minutesRemaining -= sessionLength;
-        if (minutesRemaining <= 0) break;
+        if (workMinutesLeft <= 0) {
+          break;
+        }
       }
-    }
 
-    // Move to next day
-    dateCursor = addMinutes(dateCursor, 1440); // +24 hours
+      // Go to next day
+      currentDay.setDate(currentDay.getDate() + 1);
+    }
   }
 
-  return sessions;
+  return generatedWorkSessions;
 }
 
-// OPTIONAL: Pretty print for testing
-export function formatSessions(sessions: { title: string; start: Date; end: Date }[]) {
-  return sessions.map(s => ({
-    title: s.title,
-    start: format(s.start, "yyyy-MM-dd HH:mm"),
-    end: format(s.end, "yyyy-MM-dd HH:mm"),
-  }));
+// Helper function: Find free blocks between tasks
+function findFreeBlocks(tasks: Task[], dayStart: Date, dayEnd: Date) {
+  const sameDayTasks = tasks
+    .filter(task => {
+      const start = parseISO(task.start_time);
+      return start.toDateString() === dayStart.toDateString();
+    })
+    .sort((a, b) => parseISO(a.start_time).getTime() - parseISO(b.start_time).getTime());
+
+  const freeBlocks: { start: Date; end: Date }[] = [];
+  let cursor = dayStart;
+
+  for (const task of sameDayTasks) {
+    const taskStart = parseISO(task.start_time);
+    if (isBefore(cursor, taskStart)) {
+      freeBlocks.push({ start: cursor, end: taskStart });
+    }
+    const taskEnd = parseISO(task.end_time);
+    if (isAfter(taskEnd, cursor)) {
+      cursor = taskEnd;
+    }
+  }
+
+  if (isBefore(cursor, dayEnd)) {
+    freeBlocks.push({ start: cursor, end: dayEnd });
+  }
+
+  return freeBlocks;
 }
