@@ -77,3 +77,31 @@ export const getUsername = async (): Promise<string | null> => {
   const name = await storage.getItem("user_name");
   return name;
 };
+
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+// Already existing stuff...
+
+// 🔵 New functions for work hours:
+export const saveWorkHours = async (start: string, end: string) => {
+  try {
+    await AsyncStorage.setItem('workStartTime', start);
+    await AsyncStorage.setItem('workEndTime', end);
+  } catch (error) {
+    console.error('Error saving work hours:', error);
+  }
+};
+
+export const getWorkHours = async (): Promise<{ start: string, end: string } | null> => {
+  try {
+    const start = await AsyncStorage.getItem('workStartTime');
+    const end = await AsyncStorage.getItem('workEndTime');
+    if (start && end) {
+      return { start, end };
+    }
+    return null;
+  } catch (error) {
+    console.error('Error getting work hours:', error);
+    return null;
+  }
+};
