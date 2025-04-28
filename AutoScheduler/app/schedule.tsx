@@ -7,6 +7,9 @@ import { useRouter } from "expo-router";
 import { getUserId } from "../utils/tokenStorage";
 import { useTheme } from "../components/ThemeContext";
 import { Ionicons } from '@expo/vector-icons';
+import { generateMasterSchedule, clearMasterSchedule } from "../utils/masterSchedule";
+
+
 // import { StatusBar } from 'expo-status-bar'; // ADD THIS if using Expo
 
 // import { confirmAsync } from "../utils/confirmAsync"; // adjust path!
@@ -150,10 +153,12 @@ export default function ScheduleScreen() {
 
   const postEvents = async () => {
     try {
-      setLoading(true);
       const user_id = await getUserId();
-      if (!user_id) throw new Error("User ID is missing.");
-
+  
+      if (!user_id) {
+        throw new Error("User ID is missing.");
+      }
+  
       const response = await api.post("/tasks", {
         tasks: events.map(event => ({
           title: event.name,
@@ -165,26 +170,43 @@ export default function ScheduleScreen() {
           user_id: parseInt(user_id),
         })),
       });
-
+  
       console.log("Schedule submitted successfully:", response.data);
-      Alert.alert("Success", "Schedule submitted successfully!");
-      
-      // Reset form and refresh list of events
-      setEvents([{ name: "", start: "", end: "", amStart: true, amEnd: true, days: [] }]);
-      fetchEvents();
-      setActiveTab('view');
+  
+      // 📋 After successfully posting tasks, regenerate master schedule
+      const [tasksRes, assignmentsRes] = await Promise.all([
+        api.get(`tasks/user/${user_id}`),
+        api.get(`/canvas/upcoming_assignments?user_id=${user_id}`)
+      ]);
+  
+      const solidTasks = tasksRes.data.map((t: any) => ({
+        id: t.id,
+        title: t.title,
+        start_time: t.start_time,
+        end_time: t.end_time,
+        start_date: t.start_date,
+        days_of_week: t.days_of_week,
+        am_start: t.am_start,
+        am_end: t.am_end,
+        user_defined: true,
+      }));
+  
+      const assignments = assignmentsRes.data.map((a: any) => ({
+        id: a.id,
+        title: a.title,
+        due_date: a.deadline,
+      }));
+  
+      await generateMasterSchedule(solidTasks, assignments);
+      console.log("✅ Master schedule regenerated after adding tasks.");
+  
+      alert("Schedule and master schedule updated successfully!");
     } catch (error) {
-      if (axios.isAxiosError(error)) {
-        console.error("Axios error:", error.response?.data || error.message);
-        Alert.alert("Error", `Failed to submit schedule: ${error.response?.data?.message || error.message}`);
-      } else {
-        console.error("Unexpected error:", error);
-        Alert.alert("Error", error instanceof Error ? error.message : "An error occurred.");
-      }
-    } finally {
-      setLoading(false);
+      console.error("Error submitting schedule:", error);
+      alert("Failed to submit schedule.");
     }
   };
+  
 
   const updateExistingEvent = async () => {
     if (!selectedEvent || !selectedEvent.id) return;
@@ -243,7 +265,41 @@ export default function ScheduleScreen() {
     try {
       console.log("Deleting event with ID:", id);
       await api.delete(`/tasks/${id}`);
-      fetchEvents();
+    
+      const user_id = await getUserId();
+      if (!user_id) throw new Error("User ID is missing.");
+    
+      // 📋 Re-fetch updated tasks and assignments
+      const [tasksRes, assignmentsRes] = await Promise.all([
+        api.get(`tasks/user/${user_id}`),
+        api.get(`/canvas/upcoming_assignments?user_id=${user_id}`)
+      ]);
+    
+      const solidTasks = tasksRes.data.map((t: any) => ({
+        id: t.id,
+        title: t.title,
+        start_time: t.start_time,
+        end_time: t.end_time,
+        start_date: t.start_date,
+        days_of_week: t.days_of_week,
+        am_start: t.am_start,
+        am_end: t.am_end,
+        user_defined: true,
+      }));
+    
+      const assignments = assignmentsRes.data.map((a: any) => ({
+        id: a.id,
+        title: a.title,
+        due_date: a.deadline,
+      }));
+    
+      // 🚨 Clear and regenerate master schedule
+      await clearMasterSchedule();
+      await generateMasterSchedule(solidTasks, assignments);
+    
+      console.log("✅ Master schedule regenerated after deletion.");
+    
+      fetchEvents(); // 🔄 Refresh your screen events
     } catch (error) {
       if (axios.isAxiosError(error)) {
         console.error("Axios error:", error.response?.data || error.message);
@@ -264,7 +320,7 @@ export default function ScheduleScreen() {
   };
 
   const renderTabButtons = () => (
-    <View style={styles.tabBar}>
+      <View style={[styles.tabBar, { backgroundColor: theme.cardColor, borderBottomColor: theme.navBarBorderColor }]}>
       <TouchableOpacity 
         style={[styles.tabButton, activeTab === 'view' && { backgroundColor: theme.buttonColor }]} 
         onPress={() => setActiveTab('view')}
@@ -735,11 +791,10 @@ const styles = StyleSheet.create({
   },
   tabBar: {
     flexDirection: "row",
-    backgroundColor: "#f0f0f0",
     paddingHorizontal: 10,
     borderBottomWidth: 1,
-    borderBottomColor: "#ddd"
   },
+  
   tabButton: {
     paddingVertical: 12,
     paddingHorizontal: 20,

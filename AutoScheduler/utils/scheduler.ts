@@ -83,17 +83,26 @@ export function scheduleAssignments(
         
           // Check against manual tasks
           const manualTasksOnDay = userTasks.filter(task => {
-            if (!task.start_time || !task.end_time || !task.days_of_week) return false;
-            const today = new Date();
-            const dayIndexMap = { SU: 0, M: 1, T: 2, W: 3, TH: 4, F: 5, S: 6 };
-            const todayIndex = today.getDay();
-            const taskDayIndex = dayIndexMap[task.days_of_week[0] as keyof typeof dayIndexMap] || 0;
-            const shiftDays = (taskDayIndex - todayIndex + 7) % 7;
-            const taskDate = addDays(today, shiftDays);
-            return format(taskDate, "yyyy-MM-dd") === format(bestDay, "yyyy-MM-dd");
+            if (!task.start_time || !task.end_time) return false;
+          
+            // 1. If task has a start_date, match exact date
+            if (task.start_date && format(parseISO(task.start_date), "yyyy-MM-dd") === format(bestDay, "yyyy-MM-dd")) {
+              return true;
+            }
+          
+            // 2. If task has days_of_week, match recurring days
+            if (task.days_of_week && task.days_of_week.length > 0) {
+              const dayAbbreviations = ["SU", "M", "T", "W", "TH", "F", "S"];
+              const bestDayAbbrev = dayAbbreviations[bestDay.getDay()];
+              return task.days_of_week.includes(bestDayAbbrev);
+            }
+          
+            return false;
           });
+          
         
-          const isConflict = manualTasksOnDay.some(task => {
+          // First check manual tasks conflicts
+          const isManualTaskConflict = manualTasksOnDay.some(task => {
             if (!task.start_time || !task.end_time) return false;
             const [taskStartH, taskStartM] = task.start_time.split(":").map(Number);
             const [taskEndH, taskEndM] = task.end_time.split(":").map(Number);
@@ -101,9 +110,25 @@ export function scheduleAssignments(
             const taskEndMinutes = (task.am_end === false ? taskEndH + 12 : taskEndH) * 60 + taskEndM;
             return sessionStartMinutes < taskEndMinutes && sessionEndMinutes > taskStartMinutes;
           });
+
+          // 🔵 Now check work sessions already scheduled
+          const isWorkSessionConflict = workSessions.some(session => {
+            if (!session.start_time || !session.end_time) return false;
+            const sessionStart = parseISO(session.start_time);
+            const sessionEnd = parseISO(session.end_time);
+            const existingStartMinutes = sessionStart.getHours() * 60 + sessionStart.getMinutes();
+            const existingEndMinutes = sessionEnd.getHours() * 60 + sessionEnd.getMinutes();
+            const sessionDay = format(sessionStart, "yyyy-MM-dd");
+            return sessionDay === format(bestDay, "yyyy-MM-dd") &&
+              sessionStartMinutes < existingEndMinutes &&
+              sessionEndMinutes > existingStartMinutes;
+          });
+
+          // ✅ Now true if either conflicts
+          const isConflict = isManualTaskConflict || isWorkSessionConflict;
+
         
           if (!isConflict) {
-            // ✅ Safe to schedule
             workSessions.push({
               id: nextTaskId++,
               title: `Work on ${assignment.title}`,
@@ -113,12 +138,16 @@ export function scheduleAssignments(
               days_of_week: null,
               user_defined: false,
             });
-        
+          
             const bestDayStr = format(bestDay, "yyyy-MM-dd");
             dayLoad[bestDayStr] = (dayLoad[bestDayStr] || 0) + 1;
             sessionScheduled = true;
             break;
+          } else {
+            // ❗ Conflict: move start time forward 1 hour and try again
+            offsetHours++;
           }
+          
         }
         
         // If can't schedule, just skip it gracefully
