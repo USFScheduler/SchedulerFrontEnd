@@ -16,6 +16,11 @@ import { getUserInfo, clearTokens, saveWorkHours, getWorkHours } from "../utils/
 import AppNavBar from "../components/TabBar";
 import { useTheme } from "../components/ThemeContext";
 
+import { generateMasterSchedule } from "../utils/masterSchedule";
+import { getUserId } from "../utils/tokenStorage";
+import api from "../api/api";
+
+
 export default function SettingsScreen() {
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const [currentPassword, setCurrentPassword] = useState("");
@@ -63,11 +68,48 @@ export default function SettingsScreen() {
   };
 
   const handleSaveWorkHours = async () => {
-    const start = formatDateToTimeString(workStartTime);
-    const end = formatDateToTimeString(workEndTime);
-    await saveWorkHours(start, end);
-    Alert.alert("Saved", "Work time preferences saved successfully!");
+    try {
+      const start = formatDateToTimeString(workStartTime);
+      const end = formatDateToTimeString(workEndTime);
+      await saveWorkHours(start, end);
+  
+      // NEW: Regenerate the Master Schedule after saving work times
+      const userId = await getUserId();
+      if (!userId) throw new Error("No user ID found!");
+  
+      const [tasksRes, assignmentsRes] = await Promise.all([
+        api.get(`tasks/user/${userId}`),
+        api.get(`/canvas/upcoming_assignments?user_id=${userId}`),
+      ]);
+  
+      const solidTasks = tasksRes.data.map((t: any) => ({
+        id: t.id,
+        title: t.title,
+        start_time: t.start_time,
+        end_time: t.end_time,
+        start_date: t.start_date,
+        days_of_week: t.days_of_week,
+        am_start: t.am_start,
+        am_end: t.am_end,
+        type: "task" as const,
+      }));
+  
+      const assignments = assignmentsRes.data.map((a: any) => ({
+        id: a.id,
+        title: a.title,
+        due_date: a.deadline,
+      }));
+  
+      await generateMasterSchedule(solidTasks, assignments);
+      console.log("✅ MasterSchedule regenerated after work hours update");
+  
+      Alert.alert("Saved", "Work time preferences saved and schedule updated!");
+    } catch (error) {
+      console.error("❌ Error updating schedule after work hours change:", error);
+      Alert.alert("Error", "Something went wrong updating the schedule.");
+    }
   };
+  
 
   const formatDateToTimeString = (date: Date) => {
     const hours = date.getHours().toString().padStart(2, "0");

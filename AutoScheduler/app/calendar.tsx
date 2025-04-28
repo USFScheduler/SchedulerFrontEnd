@@ -4,6 +4,7 @@ import { Calendar } from "react-native-calendars";
 import { format, parseISO } from "date-fns";
 import api from "../api/api";
 import { getUserId } from "../utils/tokenStorage";
+import { loadMasterSchedule } from "../utils/masterSchedule";
 import TabBar from "../components/TabBar";
 import { useTheme } from "../components/ThemeContext";
 
@@ -26,12 +27,21 @@ interface Task {
   type: "task";
 }
 
-type ListItem = Assignment | Task;
+interface WorkSession {
+  id: number;
+  title: string;
+  start_time: string;
+  end_time: string;
+  user_defined: boolean;
+  type: "workSession";
+}
+
+type ListItem = Assignment | Task | WorkSession;
 
 export default function CalendarScreen() {
   const { theme } = useTheme();
   const [loading, setLoading] = useState(true);
-  const [tasks, setTasks] = useState<ListItem[]>([]);
+  const [items, setItems] = useState<ListItem[]>([]);
   const [markedDates, setMarkedDates] = useState<any>({});
   const [selectedDate, setSelectedDate] = useState<string>(format(new Date(), "yyyy-MM-dd"));
   const [bounceAnims, setBounceAnims] = useState<Animated.Value[]>([]);
@@ -45,23 +55,36 @@ export default function CalendarScreen() {
       const userId = await getUserId();
       if (!userId) throw new Error("User not found");
 
-      const [tasksRes, assignmentsRes] = await Promise.all([
+      const [tasksRes, assignmentsRes, masterSchedule] = await Promise.all([
         api.get(`tasks/user/${userId}`),
         api.get(`/canvas/upcoming_assignments?user_id=${userId}`),
+        loadMasterSchedule(),
       ]);
 
       const fetchedTasks = tasksRes.data.map((t: any) => ({ ...t, type: "task" as const }));
-      const fetchedAssignments = assignmentsRes.data.map((a: any, index: number) => ({
+      const fetchedAssignments = assignmentsRes.data.map((a: any, idx: number) => ({
         ...a,
-        id: index,
+        id: idx,
         type: "assignment" as const,
       }));
 
-      const combined = [...fetchedTasks, ...fetchedAssignments];
-      setTasks(combined);
+      let fetchedWorkSessions: WorkSession[] = [];
+      if (masterSchedule && masterSchedule.workSessions) {
+        fetchedWorkSessions = masterSchedule.workSessions.map((w: any) => ({
+          id: w.id,
+          title: w.title,
+          start_time: w.start_time,
+          end_time: w.end_time,
+          user_defined: w.user_defined,
+          type: "workSession" as const,
+        }));
+      }
+
+      const combined = [...fetchedTasks, ...fetchedAssignments, ...fetchedWorkSessions];
+      setItems(combined);
       generateMarkedDates(combined);
     } catch (error) {
-      console.error("Error fetching tasks or assignments:", error);
+      console.error("Error fetching data:", error);
     } finally {
       setLoading(false);
     }
@@ -71,7 +94,7 @@ export default function CalendarScreen() {
     const marks: { [date: string]: { dots: { color: string }[] } } = {};
     const today = new Date();
 
-    items.forEach((item) => {
+    items.forEach(item => {
       let datesToMark: string[] = [];
 
       if (item.type === "assignment" && item.deadline) {
@@ -94,10 +117,19 @@ export default function CalendarScreen() {
         }
       }
 
+      if (item.type === "workSession" && item.start_time) {
+        datesToMark.push(format(parseISO(item.start_time), "yyyy-MM-dd"));
+      }
+
       datesToMark = [...new Set(datesToMark)];
-      datesToMark.forEach((dateKey) => {
+      datesToMark.forEach(dateKey => {
         if (!marks[dateKey]) marks[dateKey] = { dots: [] };
-        const color = item.type === "assignment" ? "#3498db" : "#9b59b6";
+        const color =
+          item.type === "assignment"
+            ? "#e74c3c"
+            : item.type === "workSession"
+            ? "#5dade2"
+            : "#9b59b6";
         if (!marks[dateKey].dots.find(dot => dot.color === color)) {
           marks[dateKey].dots.push({ color });
         }
@@ -112,7 +144,7 @@ export default function CalendarScreen() {
     return days[date.getDay()];
   };
 
-  const todayItems = tasks.filter((item) => {
+  const todayItems = items.filter(item => {
     if (item.type === "assignment" && item.deadline) {
       return format(parseISO(item.deadline), "yyyy-MM-dd") === selectedDate;
     }
@@ -124,17 +156,30 @@ export default function CalendarScreen() {
         return true;
       }
     }
+    if (item.type === "workSession" && item.start_time) {
+      return format(parseISO(item.start_time), "yyyy-MM-dd") === selectedDate;
+    }
     return false;
   }).sort((a, b) => {
-    const getTime = (item: ListItem) => {
+    const getStartMinutes = (item: ListItem) => {
       if (item.type === "task" && item.start_time) {
         const [h, m] = item.start_time.split(":").map(Number);
-        return h * 60 + m;
+        return (item.am_start ? (h % 12) : (h % 12) + 12) * 60 + m;
       }
-      return 0;
+      if (item.type === "workSession" && item.start_time) {
+        const parsed = parseISO(item.start_time);
+        return parsed.getHours() * 60 + parsed.getMinutes();
+      }
+      if (item.type === "assignment" && item.deadline) {
+        const parsed = parseISO(item.deadline);
+        return parsed.getHours() * 60 + parsed.getMinutes();
+      }
+      return Infinity;
     };
-    return getTime(a) - getTime(b);
+  
+    return getStartMinutes(a) - getStartMinutes(b);
   });
+  
 
   useEffect(() => {
     const anims = todayItems.map(() => new Animated.Value(0));
@@ -147,24 +192,18 @@ export default function CalendarScreen() {
         bounciness: 12,
       })
     )).start();
-  }, [selectedDate, tasks.length]);
+  }, [selectedDate, items.length]);
 
   const formatItemTime = (item: ListItem) => {
     if (item.type === "task" && item.start_time && item.end_time) {
       try {
-        const startParts = item.start_time.split(":").map(Number);
-        const endParts = item.end_time.split(":").map(Number);
-
-        if (startParts.length !== 2 || endParts.length !== 2) {
-          return "Invalid time";
-        }
-
+        const startParts = item.start_time.split(":" ).map(Number);
+        const endParts = item.end_time.split(":" ).map(Number);
         const [startH, startM] = startParts;
         const [endH, endM] = endParts;
 
         const startPeriod = (item.am_start ?? (startH < 12)) ? "AM" : "PM";
         const endPeriod = (item.am_end ?? (endH < 12)) ? "AM" : "PM";
-
         const formatHour = (h: number) => (h % 12 === 0 ? 12 : h % 12);
 
         if (startPeriod === endPeriod) {
@@ -177,14 +216,18 @@ export default function CalendarScreen() {
         return "Invalid time";
       }
     }
+    if (item.type === "workSession") {
+      const start = parseISO(item.start_time);
+      const end = parseISO(item.end_time);
+      return `${format(start, "h:mm a")} - ${format(end, "h:mm a")}`;
+    }
     return "Time unknown";
   };
 
   const renderItem = ({ item, index }: { item: ListItem; index: number }) => {
     const scale = bounceAnims[index] || new Animated.Value(1);
-    const dueToday = item.type === "assignment";
-
-    const timeString = formatItemTime(item);
+    const isAssignment = item.type === "assignment";
+    const isWorkSession = item.type === "workSession";
 
     return (
       <Animated.View
@@ -201,26 +244,23 @@ export default function CalendarScreen() {
         }}
       >
         <View style={styles.badgeContainer}>
-          <Text style={[
-            styles.badge,
-            { backgroundColor: dueToday ? "#3498db" : "#9b59b6", color: "#fff" }
-          ]}>
-            {dueToday ? "Canvas" : "Task"}
+          <Text style={[styles.badge, { backgroundColor: isAssignment ? "#e74c3c" : isWorkSession ? "#5dade2" : "#9b59b6", color: "#fff" }]}>
+            {isAssignment ? "Canvas" : isWorkSession ? "Work" : "Task"}
           </Text>
         </View>
 
+
         <Text style={[styles.itemTitle, { color: theme.textColor }]}>{item.title}</Text>
 
-        {dueToday && item.deadline && (
-          <Text style={[styles.dueText, { color: theme.textColor }]}>
-            Due today by {format(parseISO(item.deadline), "h:mm a")}
+        {isAssignment && item.deadline && (
+          <Text style={[styles.dueText, { color: "#e74c3c" }]}>
+            Due by {format(parseISO(item.deadline), "h:mm a")}
           </Text>
         )}
 
-        {!dueToday && timeString && (
-          <Text style={[styles.dueText, { color: theme.textColor }]}>
-            {timeString}
-          </Text>
+
+        {!isAssignment && formatItemTime(item) && (
+          <Text style={[styles.dueText, { color: theme.textColor }]}>{formatItemTime(item)}</Text>
         )}
       </Animated.View>
     );
@@ -228,7 +268,7 @@ export default function CalendarScreen() {
 
   if (loading) {
     return (
-      <View style={[styles.centered, { backgroundColor: theme.backgroundColor }]}>
+      <View style={[styles.centered, { backgroundColor: theme.backgroundColor }]}> 
         <ActivityIndicator size="large" color="#00bfff" />
       </View>
     );
@@ -245,7 +285,6 @@ export default function CalendarScreen() {
           markingType="multi-dot"
           onDayPress={(day: { dateString: string }) => setSelectedDate(day.dateString)}
           monthFormat="MMMM yyyy"
-          hideArrows={false}
           theme={{
             calendarBackground: theme.backgroundColor,
             textSectionTitleColor: theme.textColor,
@@ -262,10 +301,7 @@ export default function CalendarScreen() {
         />
 
         <View style={styles.itemsContainer}>
-          <Text style={[styles.itemsHeader, { color: theme.textColor }]}>
-            Items for {selectedDate}:
-          </Text>
-
+          <Text style={[styles.itemsHeader, { color: theme.textColor }]}>Items for {selectedDate}:</Text>
           <FlatList
             data={todayItems}
             renderItem={renderItem}
@@ -274,7 +310,6 @@ export default function CalendarScreen() {
           />
         </View>
       </ScrollView>
-
       <TabBar />
     </View>
   );

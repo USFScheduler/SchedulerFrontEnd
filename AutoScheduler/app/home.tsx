@@ -37,9 +37,10 @@ interface WorkSession {
 
 type ListItem = Assignment | Task | WorkSession;
 
-const HOUR_BLOCK_HEIGHT = 80;
+const HOUR_BLOCK_HEIGHT = 93;
 
 export default function HomeScreen() {
+  const ABSOLUTE_START_HOUR = 6; // Always assume 6 AM real-world start
   const [items, setItems] = useState<ListItem[]>([]);
   const [username, setUsername] = useState<string>("User");
   const [loading, setLoading] = useState(true);
@@ -192,12 +193,21 @@ export default function HomeScreen() {
   };
 
   const calculateCurrentTimePosition = () => {
-    const now = currentHour;
+    const now = currentHour; // or new Date() depending on your logic
+  
+    console.log(
+      `[DEBUG] Calculating red line for time: ${now.toLocaleTimeString()} (Hour: ${now.getHours()}, Minutes: ${now.getMinutes()})`
+    );
+  
     const minutesSinceStart = (now.getHours() - dayStartHour) * 60 + now.getMinutes();
     const totalMinutesVisible = (dayEndHour - dayStartHour + 1) * 60;
     const position = (minutesSinceStart / totalMinutesVisible) * ((dayEndHour - dayStartHour + 1) * HOUR_BLOCK_HEIGHT);
+  
+    console.log(`[DEBUG] minutesSinceStart: ${minutesSinceStart}, totalMinutesVisible: ${totalMinutesVisible}, final pixel position: ${position}px`);
+  
     return Math.max(position, 0);
   };
+  
 
   const scrollToCurrentTime = () => {
     const position = calculateCurrentTimePosition();
@@ -234,10 +244,29 @@ export default function HomeScreen() {
   };
   
 
-  const renderItemsAtHour = (hour: number) => {
+
+  const renderHourBlock = (hour: number) => {
     const itemsAtHour = items.filter(item => getListItemDate(item).getHours() === hour);
-    return itemsAtHour.length > 0
-      ? itemsAtHour.map(item => (
+    const hasItems = itemsAtHour.length > 0;
+  
+    const ampm = hour >= 12 ? "PM" : "AM";
+    const displayHour = hour % 12 === 0 ? 12 : hour % 12;
+    const isDark = theme.backgroundColor === "#000000";
+  
+    return (
+      <View key={hour} style={[styles.hourContainer, { minHeight: hasItems ? 80 : 30 }]}>
+        {/* Line across the hour */}
+        <View style={[styles.hourLine, { backgroundColor: isDark ? "#555" : "#ccc" }]} />
+  
+        {/* Hour Label */}
+        <View style={styles.hourLabelContainer}>
+          <Text style={[styles.hourLabel, { color: theme.textColor }]}>
+            {`${displayHour}:00 ${ampm}`}
+          </Text>
+        </View>
+  
+        {/* Render any tasks/work sessions at this hour */}
+        {itemsAtHour.map(item => (
           <View
             key={`${item.type}-${item.id}`}
             style={[
@@ -258,24 +287,13 @@ export default function HomeScreen() {
               <Text style={[styles.taskTime, { color: theme.textColor }]}>{formatItemTimeRange(item)}</Text>
             )}
           </View>
-        ))
-      : null;
-  };
-
-  const renderHourBlock = (hour: number) => {
-    const ampm = hour >= 12 ? "PM" : "AM";
-    const displayHour = hour % 12 === 0 ? 12 : hour % 12;
-    const isDark = theme.backgroundColor === "#000000";
-
-    return (
-      <View key={hour} style={[styles.hourContainer, { borderBottomColor: isDark ? "#ffffff" : "#000000" }]}>
-        <View style={styles.hourContent}>
-          <Text style={[styles.hourLabel, { color: theme.textColor }]}>{`${displayHour}:00 ${ampm}`}</Text>
-          <View style={[styles.hourLine, { backgroundColor: isDark ? "#555" : "#ccc" }]} />
-        </View>
+        ))}
       </View>
     );
   };
+  
+  
+  
 
   if (loading) {
     return (
@@ -295,20 +313,28 @@ export default function HomeScreen() {
       </View>
 
       {/* Middle Section */}
-      <ScrollView ref={scrollViewRef} contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 40, paddingTop: 10 }} style={{ flex: 1 }}>
-        <View style={{ position: "relative", minHeight: (dayEndHour - dayStartHour + 1) * HOUR_BLOCK_HEIGHT }}>
+      <ScrollView 
+        ref={scrollViewRef} 
+        contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 40, paddingTop: 10 }} 
+        style={{ flex: 1 }}
+      >
+        <View style={{ position: "relative", minHeight: (dayEndHour - ABSOLUTE_START_HOUR + 1) * HOUR_BLOCK_HEIGHT }}>
+          {/* Red Line */}
           <View style={[styles.currentTimeMarker, { top: calculateCurrentTimePosition() }]} />
-          {Array.from({ length: dayEndHour - dayStartHour + 1 }).map((_, index) => {
-            const hour = dayStartHour + index;
+          
+          {/* Render hour blocks from 6AM always */}
+          {Array.from({ length: dayEndHour - ABSOLUTE_START_HOUR + 1 }).map((_, index) => {
+            const hour = ABSOLUTE_START_HOUR + index;
             return (
               <View key={hour} style={styles.hourContainer}>
                 {renderHourBlock(hour)}
-                {renderItemsAtHour(hour)}
               </View>
             );
           })}
         </View>
       </ScrollView>
+
+
 
       {/* Bottom Section */}
       <TabBar />
@@ -320,10 +346,23 @@ const styles = StyleSheet.create({
   container: { flex: 1, padding: 16 },
   greeting: { fontSize: 24, fontWeight: "bold", marginBottom: 4 },
   subheading: { fontSize: 18, marginBottom: 16 },
-  hourContainer: { minHeight: 80, borderBottomWidth: 1 },
+  hourContainer: { 
+    minHeight: 80, 
+    // REMOVE borderBottomWidth: 1, 
+  },
+  
   hourContent: { flexDirection: "row", alignItems: "center", paddingVertical: 6 },
-  hourLabel: { width: 80, fontSize: 14 },
-  hourLine: { flex: 1, height: 1, marginLeft: 10 },
+  hourLine: {
+    height: 1,
+    width: "100%",
+  },
+  hourLabelContainer: {
+    marginTop: 4, // space below the line
+    marginLeft: 10,
+  },
+  hourLabel: {
+    fontSize: 14,
+  },
   taskCard: { padding: 12, borderRadius: 8, marginVertical: 4, marginLeft: 90, marginRight: 10, shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 2, elevation: 2 },
   badgeContainer: { position: "absolute", top: 8, right: 8 },
   badge: { fontSize: 10, fontWeight: "bold", padding: 4, borderRadius: 4, overflow: "hidden" },
