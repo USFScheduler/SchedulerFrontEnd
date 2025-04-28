@@ -69,22 +69,60 @@ export function scheduleAssignments(
         const [startHourStr, startMinuteStr] = (workHours.start || "08:00").split(":");
         const startHour = parseInt(startHourStr, 10);
         const startMinute = parseInt(startMinuteStr, 10);
-        const offsetHours = dayLoad[formatDay(bestDay)] || 0;
-      
-        const startDateTime = new Date(bestDay);
-        startDateTime.setHours(startHour + offsetHours, startMinute, 0, 0);
-      
-        const endDateTime = addHours(startDateTime, 1);
-      
-        workSessions.push({
-          id: nextTaskId++,
-          title: `Work on ${assignment.title}`,
-          start_time: format(startDateTime, "yyyy-MM-dd'T'HH:mm:ss.SSSX"),
-          end_time: format(endDateTime, "yyyy-MM-dd'T'HH:mm:ss.SSSX"),
-          start_date: null,
-          days_of_week: null,
-          user_defined: false,
-        });
+        
+        let offsetHours = dayLoad[formatDay(bestDay)] || 0;
+        let sessionScheduled = false;
+        
+        for (let tryHour = startHour + offsetHours; tryHour <= 20; tryHour++) { // Work up until 8PM max
+          const sessionStart = new Date(bestDay);
+          sessionStart.setHours(tryHour, startMinute, 0, 0);
+          const sessionEnd = addHours(sessionStart, 1);
+        
+          const sessionStartMinutes = tryHour * 60 + startMinute;
+          const sessionEndMinutes = sessionStartMinutes + 60;
+        
+          // Check against manual tasks
+          const manualTasksOnDay = userTasks.filter(task => {
+            if (!task.start_time || !task.end_time || !task.days_of_week) return false;
+            const today = new Date();
+            const dayIndexMap = { SU: 0, M: 1, T: 2, W: 3, TH: 4, F: 5, S: 6 };
+            const todayIndex = today.getDay();
+            const taskDayIndex = dayIndexMap[task.days_of_week[0] as keyof typeof dayIndexMap] || 0;
+            const shiftDays = (taskDayIndex - todayIndex + 7) % 7;
+            const taskDate = addDays(today, shiftDays);
+            return format(taskDate, "yyyy-MM-dd") === format(bestDay, "yyyy-MM-dd");
+          });
+        
+          const isConflict = manualTasksOnDay.some(task => {
+            if (!task.start_time || !task.end_time) return false;
+            const [taskStartH, taskStartM] = task.start_time.split(":").map(Number);
+            const [taskEndH, taskEndM] = task.end_time.split(":").map(Number);
+            const taskStartMinutes = (task.am_start === false ? taskStartH + 12 : taskStartH) * 60 + taskStartM;
+            const taskEndMinutes = (task.am_end === false ? taskEndH + 12 : taskEndH) * 60 + taskEndM;
+            return sessionStartMinutes < taskEndMinutes && sessionEndMinutes > taskStartMinutes;
+          });
+        
+          if (!isConflict) {
+            // ✅ Safe to schedule
+            workSessions.push({
+              id: nextTaskId++,
+              title: `Work on ${assignment.title}`,
+              start_time: format(sessionStart, "yyyy-MM-dd'T'HH:mm:ss.SSSX"),
+              end_time: format(sessionEnd, "yyyy-MM-dd'T'HH:mm:ss.SSSX"),
+              start_date: null,
+              days_of_week: null,
+              user_defined: false,
+            });
+        
+            const bestDayStr = format(bestDay, "yyyy-MM-dd");
+            dayLoad[bestDayStr] = (dayLoad[bestDayStr] || 0) + 1;
+            sessionScheduled = true;
+            break;
+          }
+        }
+        
+        // If can't schedule, just skip it gracefully
+        
       
         const bestDayStr = formatDay(bestDay);
         dayLoad[bestDayStr] = (dayLoad[bestDayStr] || 0) + 1;
