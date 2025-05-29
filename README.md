@@ -1,6 +1,8 @@
 # SchedulerFrontEnd
 
-This is the mobile frontend for the USF Scheduler application. It provides a responsive user interface that allows users to view, create, and manage their schedules, while interacting with the backend API for authentication and data management. 
+This is the mobile frontend for the USF Scheduler application. It provides a responsive user interface that allows users to view, create, and manage their schedules, while interacting with the backend API for authentication and data management.
+
+The application enables students to organize academic and personal events in one place, automate assignment scheduling based on calendar availability and due dates, and securely access personalized schedules using token-based authentication.
 
 ---
 
