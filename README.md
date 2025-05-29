@@ -34,7 +34,7 @@ The application enables students to organize academic and personal events in one
 - **Language**: JavaScript
 - **Framework**: React Native
 - **HTTP Client**: Axios (with custom JWT-based API wrapper)
-- **Testing**: Jest
+- **Testing**: Cypress
 
 ---
 
